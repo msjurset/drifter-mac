@@ -1,0 +1,29 @@
+.TH DRIFTER 1 "August 2026" "Drifter 1.0.0" "User Commands"
+.SH NAME
+drifter \- Native macOS local network host monitoring, mDNS discovery, and port drift auditing
+.SH SYNOPSIS
+.B Drifter.app
+.SH DESCRIPTION
+.B Drifter
+is a native macOS application for real-time local network host monitoring, mDNS microservice discovery, and port drift security auditing. It scans local subnets without root privileges using ARP table parsing and port probing, keeping all data 100% offline and local.
+.SH FEATURES
+.TP
+.B Port Drift Auditing
+Automatically tracks open ports and host state changes over time.
+.TP
+.B Terminal Integration
+Spawns SSH sessions in Ghostty, Apple Terminal, or iTerm2 with 1Password Touch ID agent support.
+.TP
+.B Runbook Integration
+Supports custom deep-linking (\fBrunbook://execute?template=...\fR) for one-click incident remediation.
+.SH FILES
+.TP
+.I ~/Library/Application Support/DrifterMac/drifter_store.json
+Local JSON store containing saved host baselines, settings, and drift events.
+.TP
+.I ~/.ssh/config
+Parsed automatically by Drifter to map local IPs to SSH Host aliases.
+.SH SEE ALSO
+\fBssh\fR(1), \fBarp\fR(8)
+.SH AUTHORS
+Published under the MIT License.
