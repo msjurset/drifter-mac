@@ -1,0 +1,12 @@
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+.DS_Store
+Pulse.app/
+Drifter.app/
+GEMINI.md
+CLAUDE.md
+*.sqlite
+*.sqlite-journal
+drifter_debug.log
