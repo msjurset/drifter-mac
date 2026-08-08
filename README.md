@@ -2,6 +2,8 @@
 
 **Drifter** is a lightweight, native macOS application for real-time local network host monitoring, mDNS microservice discovery, and port drift security auditing. Built with Swift 6, AppKit, and SwiftUI, Drifter provides instant visibility over your home lab, Raspberry Pi nodes, Home Assistant instances, Docker services, and local subnets without cloud lock-in or subscription bloat.
 
+📖 **For detailed usage instructions and workflows, see the [User Guide](USER_GUIDE.md).**
+
 ---
 
 ## Key Features
