@@ -8,11 +8,13 @@
 
 ## Preview
 
+<p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
 ![Drifter Dashboard](docs/images/dashboard.png)
-<p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
 
-![Drifter Drift Alerts](docs/images/alerts.png)
+<br>
+
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
+![Drifter Drift Alerts](docs/images/alerts.png)
 
 ---
 

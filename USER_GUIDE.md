@@ -36,8 +36,8 @@ When you launch Drifter for the first time:
 2. **Initial Subnet Scan**: If your host list is empty, Drifter automatically triggers a subnet scan using your Mac's ARP table.
 3. **Manual Scan**: Click **Scan Local Network** at the bottom of the sidebar at any time to run an instant scan.
 
-![Drifter All Hosts Dashboard](docs/images/dashboard.png)
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
+![Drifter All Hosts Dashboard](docs/images/dashboard.png)
 
 ---
 
@@ -53,8 +53,8 @@ Whenever Drifter detects a structural change (such as port 22 or port 80 opening
 - The **Drift Alerts** tab in the main sidebar.
 - The macOS **Menu Bar** icon badge.
 
-![Drift & Security Alerts](docs/images/alerts.png)
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
+![Drift & Security Alerts](docs/images/alerts.png)
 
 ---
 
@@ -72,8 +72,8 @@ Drifter includes an AppKit-backed search bar with **tokenized filter support**:
 
 You can also use the sidebar categories (**Servers & Storage**, **IoT & Microservices**) to filter hosts by device type.
 
-![Device Categories Filtering](docs/images/categories.png)
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
+![Device Categories Filtering](docs/images/categories.png)
 
 ---
 
@@ -134,8 +134,8 @@ Navigate to **Settings** in the sidebar to configure:
 - **Runbook URL Template**: Customize the deep-link query format.
 - **Drift Alert Notifications**: Enable or disable macOS desktop notifications.
 
-![Drifter Settings](docs/images/settings.png)
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
+![Drifter Settings](docs/images/settings.png)
 
 ---
 
