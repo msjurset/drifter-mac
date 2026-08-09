@@ -6,6 +6,14 @@
 
 ---
 
+## Preview
+
+![Drifter Dashboard](docs/images/dashboard.png)
+
+![Drifter Drift Alerts](docs/images/alerts.png)
+
+---
+
 ## Key Features
 
 - **Port Drift & Security Auditing**: Automatically detects when network hosts open new ports, close existing ports, or change IP lease assignments.
