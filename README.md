@@ -9,8 +9,10 @@
 ## Preview
 
 ![Drifter Dashboard](docs/images/dashboard.png)
+*(Image anonymized by [anonymark](https://github.com/msjurset/anonymark))*
 
 ![Drifter Drift Alerts](docs/images/alerts.png)
+*(Image anonymized by [anonymark](https://github.com/msjurset/anonymark))*
 
 ---
 

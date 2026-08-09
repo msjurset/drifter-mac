@@ -37,6 +37,7 @@ When you launch Drifter for the first time:
 3. **Manual Scan**: Click **Scan Local Network** at the bottom of the sidebar at any time to run an instant scan.
 
 ![Drifter All Hosts Dashboard](docs/images/dashboard.png)
+*(Image anonymized by [anonymark](https://github.com/msjurset/anonymark))*
 
 ---
 
@@ -53,6 +54,7 @@ Whenever Drifter detects a structural change (such as port 22 or port 80 opening
 - The macOS **Menu Bar** icon badge.
 
 ![Drift & Security Alerts](docs/images/alerts.png)
+*(Image anonymized by [anonymark](https://github.com/msjurset/anonymark))*
 
 ---
 
@@ -71,6 +73,7 @@ Drifter includes an AppKit-backed search bar with **tokenized filter support**:
 You can also use the sidebar categories (**Servers & Storage**, **IoT & Microservices**) to filter hosts by device type.
 
 ![Device Categories Filtering](docs/images/categories.png)
+*(Image anonymized by [anonymark](https://github.com/msjurset/anonymark))*
 
 ---
 
@@ -132,6 +135,7 @@ Navigate to **Settings** in the sidebar to configure:
 - **Drift Alert Notifications**: Enable or disable macOS desktop notifications.
 
 ![Drifter Settings](docs/images/settings.png)
+*(Image anonymized by [anonymark](https://github.com/msjurset/anonymark))*
 
 ---
 
