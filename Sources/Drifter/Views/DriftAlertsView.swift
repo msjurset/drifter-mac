@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DriftAlertsView: View {
     @ObservedObject var store: DrifterStore
+    @State private var activeExplainerEvent: DriftEvent?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -45,23 +46,36 @@ struct DriftAlertsView: View {
                 List {
                     ForEach(store.driftEvents) { event in
                         HStack(alignment: .top, spacing: 14) {
-                            Image(systemName: iconForType(event.type))
-                                .font(.title3)
-                                .foregroundStyle(colorForType(event.type))
-                                .frame(width: 24)
+                            Button {
+                                activeExplainerEvent = event
+                            } label: {
+                                Image(systemName: iconForType(event.type))
+                                    .font(.title3)
+                                    .foregroundStyle(colorForType(event.type))
+                                    .frame(width: 24)
+                            }
+                            .buttonStyle(.plain)
+                            .focusable(false)
 
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
                                     Text(event.hostname.isEmpty ? event.hostIp : event.hostname)
                                         .font(.headline)
-                                    Text(event.type.replacingOccurrences(of: "_", with: " ").capitalized)
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(colorForType(event.type).opacity(0.15))
-                                        .foregroundStyle(colorForType(event.type))
-                                        .clipShape(Capsule())
+
+                                    Button {
+                                        activeExplainerEvent = event
+                                    } label: {
+                                        Text(event.type.replacingOccurrences(of: "_", with: " ").capitalized)
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(colorForType(event.type).opacity(0.15))
+                                            .foregroundStyle(colorForType(event.type))
+                                            .clipShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .focusable(false)
 
                                     Spacer()
 
@@ -105,6 +119,9 @@ struct DriftAlertsView: View {
                 }
                 .listStyle(.plain)
             }
+        }
+        .popover(item: $activeExplainerEvent) { evt in
+            AlertExplainerPopoverView(event: evt, store: store)
         }
     }
 

@@ -1,8 +1,14 @@
 import SwiftUI
 
+private struct PortExplainerItem: Identifiable {
+    let port: Int
+    var id: Int { port }
+}
+
 struct HostDetailView: View {
     let host: HostItem
     @ObservedObject var store: DrifterStore
+    @State private var selectedPortForExplainer: Int?
 
     var body: some View {
         ScrollView {
@@ -124,22 +130,28 @@ struct HostDetailView: View {
                     } else {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                             ForEach(host.openPorts, id: \.self) { port in
-                                HStack {
-                                    Image(systemName: "network")
-                                        .foregroundStyle(.blue)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Port \(port)")
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                        Text(portLabel(port))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                Button {
+                                    selectedPortForExplainer = port
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "network")
+                                            .foregroundStyle(.blue)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Port \(port)")
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                            Text(portLabel(port))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(NSColor.windowBackgroundColor))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
                                 }
-                                .padding(8)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color(NSColor.windowBackgroundColor))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .buttonStyle(.plain)
+                                .focusable(false)
                             }
                         }
                     }
@@ -176,6 +188,19 @@ struct HostDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .padding()
+        }
+        .popover(item: Binding(
+            get: { selectedPortForExplainer.map { PortExplainerItem(port: $0) } },
+            set: { selectedPortForExplainer = $0?.port }
+        )) { item in
+            let tempEvent = DriftEvent(
+                hostId: host.id,
+                hostIp: host.ip,
+                hostname: host.hostname,
+                type: "port_opened",
+                detail: "Port \(item.port) open on \(host.hostname.isEmpty ? host.ip : host.hostname)"
+            )
+            AlertExplainerPopoverView(event: tempEvent, store: store)
         }
     }
 
