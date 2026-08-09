@@ -194,6 +194,8 @@ public struct AlertExplainerPopoverView: View {
                 Text(info.summary)
                     .font(.subheadline)
                     .foregroundStyle(.primary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 
                 if let ctx = info.serviceContext {
                     Text(ctx)
@@ -201,6 +203,8 @@ public struct AlertExplainerPopoverView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.blue)
                         .padding(.top, 2)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             
@@ -214,6 +218,8 @@ public struct AlertExplainerPopoverView: View {
                 Text(info.significance)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             
             // Suggested Triage Steps
@@ -232,6 +238,8 @@ public struct AlertExplainerPopoverView: View {
                         Text(step)
                             .font(.caption)
                             .foregroundStyle(.primary)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
