@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 
-@MainActor
 public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendable {
     public static let shared = NetworkScanner()
 
@@ -9,65 +8,85 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
         super.init()
     }
 
-    /// Performs a swift scan of local ARP table after warming the subnet and probes common ports
+    /// Performs a swift scan of local ARP table after warming the subnet and probes common ports concurrently
     public func scanLocalSubnet() async -> [HostItem] {
-        var discoveredHosts: [HostItem] = []
-
         // 1. Warm the kernel ARP cache across the active IPv4 subnet
         if let subnetBase = SubnetSweeper.detectLocalSubnetBase() {
             await SubnetSweeper.warmSubnet(subnetBase: subnetBase)
         }
 
         // 2. Ensure Bonjour service discovery is active
-        BonjourScanner.shared.startBrowsing()
+        await MainActor.run {
+            BonjourScanner.shared.startBrowsing()
+        }
 
         let arpResults = parseARPTable()
 
-        for (ip, mac) in arpResults {
-            var openPorts: [Int] = []
-            let portsToProbe = [22, 80, 443, 8123, 53, 5000, 8080]
+        // 3. Concurrently probe each discovered host and its ports
+        return await withTaskGroup(of: HostItem.self) { group in
+            for (ip, mac) in arpResults {
+                group.addTask {
+                    let openPorts = await self.probeStandardPorts(ip: ip)
+                    let hostname = self.resolveHostname(ip: ip)
+                    let vendor = VendorLookup.lookup(mac: mac)
 
-            for port in portsToProbe {
-                if await checkPort(ip: ip, port: port, timeout: 0.30) {
-                    openPorts.append(port)
+                    var mdns = await BonjourScanner.shared.services(forHost: hostname, ip: ip)
+                    if mdns.isEmpty {
+                        if openPorts.contains(8123) { mdns.append("_home-assistant._tcp") }
+                        if openPorts.contains(80) || openPorts.contains(443) { mdns.append("_http._tcp") }
+                        if openPorts.contains(22) { mdns.append("_ssh._tcp") }
+                    }
+
+                    var category = "unknown"
+                    if openPorts.contains(8123) || mdns.contains("_home-assistant._tcp") || mdns.contains("_esphomelib._tcp") || mdns.contains("_matter._tcp") || vendor.contains("Espressif") || vendor.contains("Tuya") || vendor.contains("Philips") || vendor.contains("Sonos") {
+                        category = "iot"
+                    } else if openPorts.contains(5000) || openPorts.contains(8080) || mdns.contains("_smb._tcp") || vendor.contains("Synology") || vendor.contains("Supermicro") {
+                        category = "server"
+                    } else if openPorts.contains(53) || vendor.contains("Ubiquiti") || vendor.contains("UniFi") || vendor.contains("MikroTik") || vendor.contains("Netgear") || vendor.contains("TP-Link") {
+                        category = "network"
+                    } else if !mac.isEmpty {
+                        category = "workstation"
+                    }
+
+                    return HostItem(
+                        ip: ip,
+                        mac: mac,
+                        hostname: hostname,
+                        vendor: vendor,
+                        status: "online",
+                        lastSeen: Date(),
+                        openPorts: openPorts,
+                        mdnsServices: mdns,
+                        category: category
+                    )
                 }
             }
 
-            let hostname = resolveHostname(ip: ip)
-            let vendor = VendorLookup.lookup(mac: mac)
-            var mdns = BonjourScanner.shared.services(forHost: hostname, ip: ip)
-            if mdns.isEmpty {
-                if openPorts.contains(8123) { mdns.append("_home-assistant._tcp") }
-                if openPorts.contains(80) || openPorts.contains(443) { mdns.append("_http._tcp") }
-                if openPorts.contains(22) { mdns.append("_ssh._tcp") }
+            var discovered: [HostItem] = []
+            for await host in group {
+                discovered.append(host)
             }
-
-            var category = "unknown"
-            if openPorts.contains(8123) || mdns.contains("_home-assistant._tcp") || mdns.contains("_esphomelib._tcp") || mdns.contains("_matter._tcp") || vendor.contains("Espressif") || vendor.contains("Tuya") || vendor.contains("Philips") || vendor.contains("Sonos") {
-                category = "iot"
-            } else if openPorts.contains(5000) || openPorts.contains(8080) || mdns.contains("_smb._tcp") || vendor.contains("Synology") || vendor.contains("Supermicro") {
-                category = "server"
-            } else if openPorts.contains(53) || vendor.contains("Ubiquiti") || vendor.contains("UniFi") || vendor.contains("MikroTik") || vendor.contains("Netgear") || vendor.contains("TP-Link") {
-                category = "network"
-            } else if !mac.isEmpty {
-                category = "workstation"
-            }
-
-            let host = HostItem(
-                ip: ip,
-                mac: mac,
-                hostname: hostname,
-                vendor: vendor,
-                status: "online",
-                lastSeen: Date(),
-                openPorts: openPorts,
-                mdnsServices: mdns,
-                category: category
-            )
-            discoveredHosts.append(host)
+            return discovered.sorted { $0.ip.localizedStandardCompare($1.ip) == .orderedAscending }
         }
+    }
 
-        return discoveredHosts
+    private func probeStandardPorts(ip: String) async -> [Int] {
+        let portsToProbe = [22, 80, 443, 8123, 53, 5000, 8080]
+        var open: [Int] = []
+        await withTaskGroup(of: (Int, Bool).self) { group in
+            for port in portsToProbe {
+                group.addTask {
+                    let isOpen = await self.checkPort(ip: ip, port: port, timeout: 0.20)
+                    return (port, isOpen)
+                }
+            }
+            for await (port, isOpen) in group {
+                if isOpen {
+                    open.append(port)
+                }
+            }
+        }
+        return open.sorted()
     }
 
     /// Probes 23 common homelab, infrastructure, and database ports concurrently on a single host
@@ -162,17 +181,21 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
     }
 
     private func resolveHostname(ip: String) -> String {
-        var hints = addrinfo()
-        hints.ai_family = AF_INET
-        var res: UnsafeMutablePointer<addrinfo>?
-        guard getaddrinfo(ip, nil, &hints, &res) == 0, let info = res else { return ip }
-        defer { freeaddrinfo(res) }
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        guard inet_pton(AF_INET, ip, &addr.sin_addr) == 1 else { return ip }
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
 
         var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-        if getnameinfo(info.pointee.ai_addr, info.pointee.ai_addrlen, &host, socklen_t(host.count), nil, 0, 0) == 0 {
+        let res = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getnameinfo($0, socklen_t(MemoryLayout<sockaddr_in>.size), &host, socklen_t(host.count), nil, 0, NI_NAMEREQD)
+            }
+        }
+        if res == 0 {
             let len = host.firstIndex(of: 0) ?? host.count
             let resolved = String(decoding: host[..<len].map { UInt8(bitPattern: $0) }, as: UTF8.self)
-            return resolved != ip ? resolved : ip
+            return (!resolved.isEmpty && resolved != ip) ? resolved : ip
         }
         return ip
     }

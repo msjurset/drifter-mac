@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 
-public enum TerminalApp: String, CaseIterable, Identifiable, Codable {
+public enum TerminalApp: String, CaseIterable, Identifiable, Codable, Sendable {
     case ghostty = "Ghostty"
     case terminal = "Apple Terminal"
     case iterm = "iTerm2"
@@ -11,7 +11,7 @@ public enum TerminalApp: String, CaseIterable, Identifiable, Codable {
     public var id: String { rawValue }
 }
 
-public struct AppSettings: Codable, Equatable {
+public struct AppSettings: Codable, Equatable, Sendable {
     public var preferredTerminal: TerminalApp
     public var defaultSSHUser: String
     public var customTerminalCommand: String
@@ -52,7 +52,7 @@ public struct AppSettings: Codable, Equatable {
     }
 }
 
-public struct HostItem: Identifiable, Codable, Equatable, Hashable {
+public struct HostItem: Identifiable, Codable, Equatable, Hashable, Sendable {
     public var id: String
     public var ip: String
     public var mac: String
@@ -117,7 +117,7 @@ public struct HostItem: Identifiable, Codable, Equatable, Hashable {
     }
 }
 
-public struct DriftEvent: Identifiable, Codable, Equatable, Hashable {
+public struct DriftEvent: Identifiable, Codable, Equatable, Hashable, Sendable {
     public var id: String
     public var hostId: String
     public var hostIp: String

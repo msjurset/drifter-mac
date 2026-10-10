@@ -67,36 +67,17 @@ public final class BonjourScanner: ObservableObject, @unchecked Sendable {
     private func handleBrowseResults(_ results: Set<NWBrowser.Result>, forType type: String) {
         for result in results {
             if case .service(let name, let serviceType, let domain, _) = result.endpoint {
-                let resolvedIp = resolveServiceIP(name: name)
                 let item = BonjourDiscoveredService(
                     serviceName: name,
                     serviceType: serviceType,
                     domain: domain,
-                    resolvedIp: resolvedIp
+                    resolvedIp: nil
                 )
                 if !discoveredServices.contains(where: { $0.serviceName == item.serviceName && $0.serviceType == item.serviceType }) {
                     discoveredServices.append(item)
                 }
             }
         }
-    }
-
-    private func resolveServiceIP(name: String) -> String? {
-        let candidateHostname = "\(name).local"
-        var hints = addrinfo()
-        hints.ai_family = AF_INET
-        var res: UnsafeMutablePointer<addrinfo>?
-        guard getaddrinfo(candidateHostname, nil, &hints, &res) == 0, let info = res else { return nil }
-        defer { freeaddrinfo(res) }
-
-        var ipBuffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
-        let sockaddrIn = info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
-        var addr = sockaddrIn.sin_addr
-        if inet_ntop(AF_INET, &addr, &ipBuffer, socklen_t(INET_ADDRSTRLEN)) != nil {
-            let len = ipBuffer.firstIndex(of: 0) ?? ipBuffer.count
-            return String(decoding: ipBuffer[..<len].map { UInt8(bitPattern: $0) }, as: UTF8.self)
-        }
-        return nil
     }
 
     /// Finds matching Bonjour service tags for a given host
