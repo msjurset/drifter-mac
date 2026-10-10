@@ -156,10 +156,18 @@ For offline or sleeping hosts with a recorded MAC address, click the **Wake** bu
 
 ## 8. Menu Bar Status Item & Background Watchdog
 
-Drifter runs an unobtrusive macOS status item in the menu bar (`waveform.path.ecg` or `exclamationmark.shield.fill` icon):
-- **Live Alert Count**: Displays active drift count and details directly in the dropdown.
-- **Background Watchdog**: Automatically polls the local subnet in the background (configured in Settings: *Every 5m, 15m, 30m, 1h*, or *Manual Only*).
-- **Direct Actions**: Trigger on-demand scans, lock the authoritative baseline, or export audit reports directly from the menu bar.
+Drifter features an unobtrusive macOS status item in the menu bar (`waveform.path.ecg` or `exclamationmark.shield.fill` icon):
+- **Left-Click**: Instantly toggles the main Drifter dashboard window (brings to front or hides).
+- **Right-Click Context Menu**:
+  - **Live Status & Drift Alerts**: Shows current watchdog polling status and a preview of up to 5 active drift alerts.
+  - **Show Main Window**: Brings the dashboard forward.
+  - **Scan Subnet Now**: Kicks off an immediate subnet ARP sweep and port scan.
+  - **Lock Baseline Now**: Locks the current network inventory as the authoritative baseline.
+  - **Export Audit Report...**: Exports a Markdown report directly to disk.
+  - **Restart**: Safely exits and relaunches Drifter.app in place.
+  - **Quit**: Closes the application.
+- **Background Watchdog**: Automatically polls the local subnet in the background (configured in Settings: *Every 5m, 15m, 30m, 1h*, or *Manual Only*). Runs entirely within the application process with no external daemon required.
+- **Show/Hide Toggle**: Can be enabled or disabled at any time under **Settings > Show Menu Bar Watchdog Item**.
 
 ---
 
