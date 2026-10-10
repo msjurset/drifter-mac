@@ -59,6 +59,7 @@ struct MainView: View {
                     }
                 }
                 .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
                 .safeAreaInset(edge: .bottom) {
                     VStack(spacing: 8) {
                         Button {
@@ -112,12 +113,13 @@ struct MainView: View {
                     .padding(10)
                 }
             }
-            .frame(width: CGFloat(sidebarWidth))
+            .background(Color(NSColor.windowBackgroundColor))
+            .frame(width: max(200, CGFloat(sidebarWidth)), alignment: .leading)
 
             DraggableDivider(
                 width: sidebarWidthBinding,
-                minWidth: 160,
-                maxWidth: 400,
+                minWidth: 200,
+                maxWidth: 360,
                 defaultWidth: 220
             )
 
@@ -135,12 +137,12 @@ struct MainView: View {
                         selectedHostId: $store.selectedHostId,
                         filterText: $filterText
                     )
-                    .frame(width: CGFloat(hostListWidth))
+                    .frame(width: max(240, CGFloat(hostListWidth)), alignment: .leading)
 
                     DraggableDivider(
                         width: hostListWidthBinding,
-                        minWidth: 200,
-                        maxWidth: 500,
+                        minWidth: 240,
+                        maxWidth: 450,
                         defaultWidth: 280
                     )
 
@@ -164,7 +166,7 @@ struct MainView: View {
                 }
             }
         }
-        .frame(minWidth: 850, minHeight: 550)
+        .frame(minWidth: 920, minHeight: 580)
         .onAppear {
             MenuBarManager.shared.setup(store: store)
             if store.hosts.isEmpty {

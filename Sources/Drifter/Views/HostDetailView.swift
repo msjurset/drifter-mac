@@ -128,57 +128,79 @@ struct HostDetailView: View {
         return list
     }
 
-    private var isHeaderConstrained: Bool {
-        headerWidth > 0 && headerWidth < 560
+    private var headerIcon: some View {
+        ZStack {
+            Circle()
+                .fill(statusColor(host.status).opacity(0.15))
+                .frame(width: 48, height: 48)
+            Image(systemName: categoryIcon(host.category))
+                .font(.system(size: 22))
+                .foregroundStyle(statusColor(host.status))
+        }
+    }
+
+    private var headerTitles: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(host.hostname.isEmpty ? host.ip : host.hostname)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                
+                StatusBadge(status: host.status)
+            }
+
+            HStack(spacing: 6) {
+                Text(host.ip)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                if !host.vendor.isEmpty {
+                    Text("•")
+                        .foregroundStyle(.tertiary)
+                    Text(host.vendor)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+        }
+        .layoutPriority(1)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .center, spacing: 16) {
-                    ZStack {
-                        Circle()
-                            .fill(statusColor(host.status).opacity(0.15))
-                            .frame(width: 56, height: 56)
-                        Image(systemName: categoryIcon(host.category))
-                            .font(.system(size: 26))
-                            .foregroundStyle(statusColor(host.status))
+                ViewThatFits(in: .horizontal) {
+                    // Wide layout: Single horizontal row
+                    HStack(alignment: .center, spacing: 16) {
+                        headerIcon
+                        headerTitles
+                        Spacer(minLength: 16)
+                        CollapsibleActionRow(items: actionItems, isConstrained: false)
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(host.hostname.isEmpty ? host.ip : host.hostname)
-                                .font(.title2)
-                                .fontWeight(.bold)
-                            
-                            StatusBadge(status: host.status)
+                    // Compact layout: Stacked with dedicated action row
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .center, spacing: 12) {
+                            headerIcon
+                            headerTitles
+                            Spacer()
                         }
 
-                        Text(host.ip)
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
+                        Divider()
 
-                        if !host.vendor.isEmpty {
-                            Text(host.vendor)
-                                .font(.subheadline)
-                                .foregroundStyle(.tertiary)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            CollapsibleActionRow(items: actionItems, isConstrained: false)
+                                .padding(.vertical, 2)
                         }
                     }
-
-                    Spacer()
-
-                    CollapsibleActionRow(items: actionItems, isConstrained: isHeaderConstrained)
                 }
                 .padding()
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { headerWidth = geo.size.width }
-                            .onChange(of: geo.size.width) { _, newWidth in headerWidth = newWidth }
-                    }
-                )
 
                 if let msg = toastMessage {
                     HStack(spacing: 8) {
@@ -230,6 +252,7 @@ struct HostDetailView: View {
                                     .background(host.isApprovedHost ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
                                     .foregroundStyle(host.isApprovedHost ? .green : .red)
                                     .clipShape(Capsule())
+                                    .fixedSize(horizontal: true, vertical: true)
 
                                 Button(host.isApprovedHost ? "Revoke Approval" : "Approve") {
                                     store.toggleHostApproval(id: host.id)
@@ -450,6 +473,7 @@ struct StatusBadge: View {
             .background(color.opacity(0.2))
             .foregroundStyle(color)
             .clipShape(Capsule())
+            .fixedSize(horizontal: true, vertical: true)
     }
 
     private var color: Color {

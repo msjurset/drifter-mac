@@ -106,7 +106,7 @@ struct HostListView: View {
                     .padding(.vertical, 4)
                     .tag(host.id)
                 }
-                .listStyle(.sidebar)
+                .listStyle(.inset(alternatesRowBackgrounds: false))
             }
         }
     }
