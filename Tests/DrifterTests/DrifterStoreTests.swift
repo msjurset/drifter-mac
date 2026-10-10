@@ -46,11 +46,13 @@ final class DrifterStoreTests: XCTestCase {
 
         let store = DrifterStore(storageFileURL: fileURL)
         XCTAssertEqual(store.settings.preferredTerminal, .ghostty)
+        XCTAssertTrue(store.settings.showMenuBarItem)
 
         var newSettings = store.settings
         newSettings.preferredTerminal = .ghostty
         newSettings.defaultSSHUser = "admin"
         newSettings.backgroundScanIntervalMinutes = 15
+        newSettings.showMenuBarItem = false
         store.updateSettings(newSettings)
 
         // Reload store from file to verify atomic JSON persistence
@@ -58,6 +60,7 @@ final class DrifterStoreTests: XCTestCase {
         XCTAssertEqual(reloadedStore.settings.preferredTerminal, .ghostty)
         XCTAssertEqual(reloadedStore.settings.defaultSSHUser, "admin")
         XCTAssertEqual(reloadedStore.settings.backgroundScanIntervalMinutes, 15)
+        XCTAssertFalse(reloadedStore.settings.showMenuBarItem)
     }
 
     @MainActor

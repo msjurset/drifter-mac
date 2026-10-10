@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var enableRunbookIntegration: Bool = true
     @State private var runbookURLTemplate: String = "runbook://execute?template=security-audit&host={ip}"
     @State private var backgroundScanInterval: Int = 0
+    @State private var showMenuBarItem: Bool = true
     @State private var showSavedToast: Bool = false
 
     var body: some View {
@@ -138,6 +139,13 @@ struct SettingsView: View {
                                 store.updateSettings(updated)
                             }
 
+                        Toggle("Show Menu Bar Watchdog Item (Status & Quick Actions)", isOn: $showMenuBarItem)
+                            .onChange(of: showMenuBarItem) { _, newValue in
+                                var updated = store.settings
+                                updated.showMenuBarItem = newValue
+                                store.updateSettings(updated)
+                            }
+
                         Divider()
 
                         Picker("Background Watchdog Polling:", selection: $backgroundScanInterval) {
@@ -218,6 +226,7 @@ struct SettingsView: View {
             enableRunbookIntegration = store.settings.enableRunbookIntegration
             runbookURLTemplate = store.settings.runbookURLTemplate
             backgroundScanInterval = store.settings.backgroundScanIntervalMinutes
+            showMenuBarItem = store.settings.showMenuBarItem
         }
     }
 
@@ -230,6 +239,7 @@ struct SettingsView: View {
         updated.enableRunbookIntegration = enableRunbookIntegration
         updated.runbookURLTemplate = runbookURLTemplate
         updated.backgroundScanIntervalMinutes = backgroundScanInterval
+        updated.showMenuBarItem = showMenuBarItem
         store.updateSettings(updated)
 
         withAnimation {

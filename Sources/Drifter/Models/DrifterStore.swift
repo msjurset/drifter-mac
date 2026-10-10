@@ -19,9 +19,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var enableRunbookIntegration: Bool
     public var runbookURLTemplate: String
     public var backgroundScanIntervalMinutes: Int
+    public var showMenuBarItem: Bool
 
     enum CodingKeys: String, CodingKey {
-        case preferredTerminal, defaultSSHUser, customTerminalCommand, notifyOnDrift, enableRunbookIntegration, runbookURLTemplate, backgroundScanIntervalMinutes
+        case preferredTerminal, defaultSSHUser, customTerminalCommand, notifyOnDrift, enableRunbookIntegration, runbookURLTemplate, backgroundScanIntervalMinutes, showMenuBarItem
     }
 
     public init(preferredTerminal: TerminalApp = .ghostty,
@@ -30,7 +31,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 notifyOnDrift: Bool = true,
                 enableRunbookIntegration: Bool = true,
                 runbookURLTemplate: String = "runbook://execute?template=security-audit&host={ip}",
-                backgroundScanIntervalMinutes: Int = 0) {
+                backgroundScanIntervalMinutes: Int = 0,
+                showMenuBarItem: Bool = true) {
         self.preferredTerminal = preferredTerminal
         self.defaultSSHUser = defaultSSHUser
         self.customTerminalCommand = customTerminalCommand
@@ -38,6 +40,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.enableRunbookIntegration = enableRunbookIntegration
         self.runbookURLTemplate = runbookURLTemplate
         self.backgroundScanIntervalMinutes = backgroundScanIntervalMinutes
+        self.showMenuBarItem = showMenuBarItem
     }
 
     public init(from decoder: Decoder) throws {
@@ -49,6 +52,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         enableRunbookIntegration = try container.decodeIfPresent(Bool.self, forKey: .enableRunbookIntegration) ?? true
         runbookURLTemplate = try container.decodeIfPresent(String.self, forKey: .runbookURLTemplate) ?? "runbook://execute?template=security-audit&host={ip}"
         backgroundScanIntervalMinutes = try container.decodeIfPresent(Int.self, forKey: .backgroundScanIntervalMinutes) ?? 0
+        showMenuBarItem = try container.decodeIfPresent(Bool.self, forKey: .showMenuBarItem) ?? true
     }
 }
 

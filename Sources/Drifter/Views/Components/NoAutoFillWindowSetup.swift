@@ -261,6 +261,15 @@ final class DrifterAppDelegate: NSObject, NSApplicationDelegate {
         observers.append(keyToken)
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            for window in sender.windows where !(window is NSPanel) {
+                window.makeKeyAndOrderFront(self)
+            }
+        }
+        return true
+    }
+
     deinit {
         for token in observers {
             NotificationCenter.default.removeObserver(token)

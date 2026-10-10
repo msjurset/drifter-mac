@@ -16,37 +16,61 @@ public final class MenuBarManager: NSObject {
         self.store = store
         requestNotificationPermissions()
         
-        // Subscribe to driftEvents updates from the store
         cancellables.removeAll()
         store.$driftEvents
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.updateMenu()
+                self?.updateStatusIcon()
             }
             .store(in: &cancellables)
 
-        // Subscribe to settings changes to dynamically adjust watchdog timer
         store.$settings
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] newSettings in
                 self?.configureWatchdogTimer()
-                self?.updateMenu()
+                self?.configureStatusItem(enabled: newSettings.showMenuBarItem)
             }
             .store(in: &cancellables)
 
         configureWatchdogTimer()
+        configureStatusItem(enabled: store.settings.showMenuBarItem)
+    }
 
-        guard statusItem == nil else {
-            updateMenu()
+    public func configureStatusItem(enabled: Bool = true) {
+        guard enabled else {
+            if let item = statusItem {
+                NSStatusBar.system.removeStatusItem(item)
+                statusItem = nil
+            }
             return
         }
 
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        let menu = NSMenu()
-        menu.delegate = self
-        item.menu = menu
-        self.statusItem = item
-        updateMenu()
+        if statusItem == nil {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            if let button = item.button {
+                button.target = self
+                button.action = #selector(handleStatusItemClick)
+                button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            }
+            self.statusItem = item
+        }
+        updateStatusIcon()
+    }
+
+    @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
+        guard let event = NSApp.currentEvent else { return }
+        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
+            showContextMenu(sender)
+        } else {
+            toggleMainWindow()
+        }
+    }
+
+    private func showContextMenu(_ sender: NSStatusBarButton) {
+        let menu = buildContextMenu()
+        statusItem?.menu = menu
+        sender.performClick(nil)
+        statusItem?.menu = nil
     }
 
     public func configureWatchdogTimer() {
@@ -79,13 +103,16 @@ public final class MenuBarManager: NSObject {
             }
             store.lastScanDate = Date()
             store.isScanning = false
-            self.updateMenu()
+            self.updateStatusIcon()
         }
     }
 
     public func updateMenu() {
-        guard let menu = statusItem?.menu else { return }
-        menu.removeAllItems()
+        updateStatusIcon()
+    }
+
+    public func buildContextMenu() -> NSMenu {
+        let menu = NSMenu()
 
         let titleItem = NSMenuItem(title: "Drifter Network Watchdog", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
@@ -100,7 +127,6 @@ public final class MenuBarManager: NSObject {
         if let store {
             let unackEvents = store.driftEvents.filter { !$0.acknowledged }
             let unackCount = unackEvents.count
-            updateStatusIcon(unackCount: unackCount)
 
             let statusText = unackCount > 0 ? "⚠️ \(unackCount) Drift Alert(s) Active" : "✅ Network Baseline Clean"
             let statusMenuItem = NSMenuItem(title: statusText, action: unackCount > 0 ? #selector(openDriftAlertsTab) : nil, keyEquivalent: "")
@@ -154,14 +180,20 @@ public final class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        let quitItem = NSMenuItem(title: "Quit Drifter", action: #selector(quitApp), keyEquivalent: "q")
+        let restartItem = NSMenuItem(title: "Restart", action: #selector(restartApp), keyEquivalent: "")
+        restartItem.target = self
+        menu.addItem(restartItem)
+
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+
+        return menu
     }
 
     @objc private func lockBaselineAction() {
         store?.lockBaseline()
-        updateMenu()
+        updateStatusIcon()
     }
 
     @objc private func exportAuditAction() {
@@ -179,7 +211,8 @@ public final class MenuBarManager: NSObject {
         showMainWindow()
     }
 
-    private func updateStatusIcon(unackCount: Int) {
+    private func updateStatusIcon() {
+        let unackCount = store?.driftEvents.filter { !$0.acknowledged }.count ?? 0
         guard let button = statusItem?.button else { return }
         let imageName = unackCount > 0 ? "exclamationmark.shield.fill" : "waveform.path.ecg"
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
@@ -187,7 +220,7 @@ public final class MenuBarManager: NSObject {
             image.isTemplate = true
             button.image = image
         }
-        button.toolTip = unackCount > 0 ? "Drifter: \(unackCount) active drift alert(s)" : "Drifter Network Watchdog"
+        button.toolTip = unackCount > 0 ? "Drifter: \(unackCount) active drift alert(s) (Right-click for options)" : "Drifter Network Watchdog (Right-click for options)"
     }
 
     private var isRunningInTestEnvironment: Bool {
@@ -216,10 +249,23 @@ public final class MenuBarManager: NSObject {
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 
-    @objc private func showMainWindow() {
+    @objc public func showMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
         if let window = NSApp.windows.first(where: { !($0 is NSPanel) }) {
             window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    @objc public func toggleMainWindow() {
+        if let window = NSApp.windows.first(where: { !($0 is NSPanel) }) {
+            if window.isVisible && NSApp.isActive {
+                window.orderOut(nil)
+            } else {
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+            }
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 
@@ -237,17 +283,22 @@ public final class MenuBarManager: NSObject {
             }
             store.lastScanDate = Date()
             store.isScanning = false
-            self.updateMenu()
+            self.updateStatusIcon()
         }
+    }
+
+    @objc private func restartApp() {
+        let path = Bundle.main.bundlePath
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let script = "while kill -0 \(pid) 2>/dev/null; do sleep 0.1; done; open \"\(path)\""
+        let task = Process()
+        task.launchPath = "/bin/sh"
+        task.arguments = ["-c", script]
+        task.launch()
+        NSApp.terminate(nil)
     }
 
     @objc private func quitApp() {
         NSApp.terminate(nil)
-    }
-}
-
-extension MenuBarManager: NSMenuDelegate {
-    public func menuWillOpen(_ menu: NSMenu) {
-        updateMenu()
     }
 }
