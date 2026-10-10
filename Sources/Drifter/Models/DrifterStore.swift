@@ -46,6 +46,12 @@ public struct HostItem: Identifiable, Codable, Equatable, Hashable {
     public var mdnsServices: [String]
     public var category: String // "server", "iot", "workstation", "network", "unknown"
     public var notes: String
+    public var baselinePorts: [Int]?
+    public var isApprovedHost: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, ip, mac, hostname, vendor, status, lastSeen, openPorts, mdnsServices, category, notes, baselinePorts, isApprovedHost
+    }
 
     public init(id: String = UUID().uuidString,
                 ip: String,
@@ -57,7 +63,9 @@ public struct HostItem: Identifiable, Codable, Equatable, Hashable {
                 openPorts: [Int] = [],
                 mdnsServices: [String] = [],
                 category: String = "unknown",
-                notes: String = "") {
+                notes: String = "",
+                baselinePorts: [Int]? = nil,
+                isApprovedHost: Bool = true) {
         self.id = id
         self.ip = ip
         self.mac = mac
@@ -69,6 +77,25 @@ public struct HostItem: Identifiable, Codable, Equatable, Hashable {
         self.mdnsServices = mdnsServices
         self.category = category
         self.notes = notes
+        self.baselinePorts = baselinePorts
+        self.isApprovedHost = isApprovedHost
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        ip = try container.decode(String.self, forKey: .ip)
+        mac = try container.decodeIfPresent(String.self, forKey: .mac) ?? ""
+        hostname = try container.decodeIfPresent(String.self, forKey: .hostname) ?? ""
+        vendor = try container.decodeIfPresent(String.self, forKey: .vendor) ?? ""
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "online"
+        lastSeen = try container.decodeIfPresent(Date.self, forKey: .lastSeen) ?? Date()
+        openPorts = try container.decodeIfPresent([Int].self, forKey: .openPorts) ?? []
+        mdnsServices = try container.decodeIfPresent([String].self, forKey: .mdnsServices) ?? []
+        category = try container.decodeIfPresent(String.self, forKey: .category) ?? "unknown"
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        baselinePorts = try container.decodeIfPresent([Int].self, forKey: .baselinePorts)
+        isApprovedHost = try container.decodeIfPresent(Bool.self, forKey: .isApprovedHost) ?? true
     }
 }
 
@@ -118,6 +145,7 @@ public final class DrifterStore: ObservableObject {
     @Published public var settings: AppSettings = AppSettings()
     @Published public var isScanning: Bool = false
     @Published public var lastScanDate: Date? = nil
+    @Published public var lastBaselineLockDate: Date? = nil
 
     private let storageFileURL: URL
 
@@ -144,16 +172,17 @@ public final class DrifterStore: ObservableObject {
             self.hosts = decoded.hosts
             self.driftEvents = decoded.driftEvents
             self.settings = decoded.settings ?? AppSettings()
+            self.lastBaselineLockDate = decoded.lastBaselineLockDate
         } catch {
             print("[DrifterStore] Error loading store: \(error)")
         }
     }
 
     private func purgeSampleHostsIfNeeded() {
-        // Purge initial hardcoded 192.168.1.* sample items if user is on a different subnet
-        if hosts.contains(where: { $0.ip == "192.168.1.140" || $0.ip == "192.168.1.50" }) {
-            hosts.removeAll { $0.ip.hasPrefix("192.168.1.") }
-            driftEvents.removeAll { $0.hostIp.hasPrefix("192.168.1.") }
+        // Purge old mock sample items if present
+        if hosts.contains(where: { $0.id.hasPrefix("sample-") }) {
+            hosts.removeAll { $0.id.hasPrefix("sample-") }
+            driftEvents.removeAll { $0.hostId.hasPrefix("sample-") }
             saveStore()
         }
     }
@@ -163,7 +192,7 @@ public final class DrifterStore: ObservableObject {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(StoreData(hosts: hosts, driftEvents: driftEvents, settings: settings))
+            let data = try encoder.encode(StoreData(hosts: hosts, driftEvents: driftEvents, settings: settings, lastBaselineLockDate: lastBaselineLockDate))
             try data.write(to: storageFileURL, options: .atomic)
         } catch {
             print("[DrifterStore] Error saving store: \(error)")
@@ -207,9 +236,77 @@ public final class DrifterStore: ObservableObject {
         saveStore()
     }
 
+    /// Locks the current network state (all known hosts and their current open ports) as the authoritative baseline.
+    public func lockBaseline() {
+        for idx in hosts.indices {
+            hosts[idx].baselinePorts = hosts[idx].openPorts
+            hosts[idx].isApprovedHost = true
+            if hosts[idx].status == "drift" {
+                hosts[idx].status = "online"
+            }
+        }
+        self.lastBaselineLockDate = Date()
+        saveStore()
+    }
+
+    /// Approves a specific drift event and merges the change into the target host's authoritative baseline.
+    public func approveDrift(for event: DriftEvent) {
+        if let idx = hosts.firstIndex(where: { $0.id == event.hostId || $0.ip == event.hostIp }) {
+            var host = hosts[idx]
+            host.isApprovedHost = true
+
+            var approved = Set(host.baselinePorts ?? host.openPorts)
+            if event.type == "port_opened" {
+                for p in host.openPorts {
+                    approved.insert(p)
+                }
+            } else if event.type == "port_closed" {
+                approved = Set(host.openPorts)
+            }
+            host.baselinePorts = Array(approved).sorted()
+            if Set(host.openPorts) == approved {
+                host.status = "online"
+            }
+            hosts[idx] = host
+            saveStore()
+        }
+        acknowledgeEvent(id: event.id)
+    }
+
+    /// Toggles approval status for an individual host
+    public func toggleHostApproval(id: String) {
+        if let idx = hosts.firstIndex(where: { $0.id == id }) {
+            hosts[idx].isApprovedHost.toggle()
+            if hosts[idx].isApprovedHost && hosts[idx].baselinePorts == nil {
+                hosts[idx].baselinePorts = hosts[idx].openPorts
+            }
+            saveStore()
+        }
+    }
+
     private struct StoreData: Codable {
         let hosts: [HostItem]
         let driftEvents: [DriftEvent]
         let settings: AppSettings?
+        let lastBaselineLockDate: Date?
+
+        enum CodingKeys: String, CodingKey {
+            case hosts, driftEvents, settings, lastBaselineLockDate
+        }
+
+        init(hosts: [HostItem], driftEvents: [DriftEvent], settings: AppSettings?, lastBaselineLockDate: Date? = nil) {
+            self.hosts = hosts
+            self.driftEvents = driftEvents
+            self.settings = settings
+            self.lastBaselineLockDate = lastBaselineLockDate
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            hosts = try container.decodeIfPresent([HostItem].self, forKey: .hosts) ?? []
+            driftEvents = try container.decodeIfPresent([DriftEvent].self, forKey: .driftEvents) ?? []
+            settings = try container.decodeIfPresent(AppSettings.self, forKey: .settings)
+            lastBaselineLockDate = try container.decodeIfPresent(Date.self, forKey: .lastBaselineLockDate)
+        }
     }
 }

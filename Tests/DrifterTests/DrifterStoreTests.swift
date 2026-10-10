@@ -57,4 +57,44 @@ final class DrifterStoreTests: XCTestCase {
         XCTAssertEqual(reloadedStore.settings.preferredTerminal, .ghostty)
         XCTAssertEqual(reloadedStore.settings.defaultSSHUser, "admin")
     }
+
+    @MainActor
+    func testBaselineLockAndEvolution() {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let fileURL = tempDir.appendingPathComponent("test_store.json")
+
+        let store = DrifterStore(storageFileURL: fileURL)
+        let host = HostItem(id: "h1", ip: "192.168.1.50", mac: "AA:BB:CC:DD:EE:FF", hostname: "server.lan", openPorts: [80])
+        store.updateHost(host)
+
+        XCTAssertNil(store.hosts.first?.baselinePorts)
+        XCTAssertNil(store.lastBaselineLockDate)
+
+        // 1. Lock baseline
+        store.lockBaseline()
+        XCTAssertEqual(store.hosts.first?.baselinePorts, [80])
+        XCTAssertNotNil(store.lastBaselineLockDate)
+
+        // 2. Simulate drift: port 8006 opened
+        var driftedHost = store.hosts.first!
+        driftedHost.openPorts = [80, 8006]
+        driftedHost.status = "drift"
+        store.updateHost(driftedHost)
+
+        let driftEvent = DriftEvent(hostId: "h1", hostIp: "192.168.1.50", hostname: "server.lan", type: "port_opened", detail: "Port 8006 newly opened")
+        store.addDriftEvent(driftEvent)
+
+        // 3. Evolve baseline: Approve drift
+        store.approveDrift(for: driftEvent)
+        let updatedHost = store.hosts.first!
+        XCTAssertTrue(updatedHost.baselinePorts?.contains(8006) == true)
+        XCTAssertEqual(updatedHost.status, "online")
+        XCTAssertTrue(store.driftEvents.first?.acknowledged == true)
+
+        // 4. Reload store to ensure persistence
+        let reloaded = DrifterStore(storageFileURL: fileURL)
+        XCTAssertEqual(reloaded.hosts.first?.baselinePorts, [80, 8006])
+        XCTAssertNotNil(reloaded.lastBaselineLockDate)
+    }
 }

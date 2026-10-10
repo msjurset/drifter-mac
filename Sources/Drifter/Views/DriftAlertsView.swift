@@ -7,9 +7,34 @@ struct DriftAlertsView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Drift & Security Alerts")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                    HStack(spacing: 8) {
+                        Text("Drift & Security Alerts")
+                            .font(.title2)
+                            .fontWeight(.bold)
+
+                        if let lockDate = store.lastBaselineLockDate {
+                            Text("Baseline: Locked")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.15))
+                                .foregroundStyle(.green)
+                                .clipShape(Capsule())
+                                .help("Authoritative baseline locked at \(lockDate.formatted(date: .abbreviated, time: .shortened))")
+                        } else {
+                            Text("Baseline: Rolling")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.15))
+                                .foregroundStyle(.secondary)
+                                .clipShape(Capsule())
+                                .help("No authoritative baseline locked. Operating in rolling audit mode.")
+                        }
+                    }
+
                     Text("Historical log of network changes, port drift, and new host discoveries")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -17,12 +42,58 @@ struct DriftAlertsView: View {
 
                 Spacer()
 
-                if !store.driftEvents.isEmpty {
-                    Button("Clear History") {
-                        store.clearDriftEvents()
+                HStack(spacing: 8) {
+                    Button {
+                        store.lockBaseline()
+                    } label: {
+                        Label("Lock Baseline", systemImage: "lock.shield.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Snapshot all currently known hosts and ports as the authoritative baseline")
+                    .focusable(false)
+
+                    Menu {
+                        Button("Export Markdown (.md)...") {
+                            let report = AuditReportGenerator.generateMarkdownReport(
+                                hosts: store.hosts,
+                                events: store.driftEvents,
+                                baselineLockDate: store.lastBaselineLockDate
+                            )
+                            AuditReportGenerator.exportReportToFile(content: report, defaultName: "drifter_network_audit", fileExtension: "md")
+                        }
+
+                        Button("Export JSON (.json)...") {
+                            let report = AuditReportGenerator.generateJSONReport(
+                                hosts: store.hosts,
+                                events: store.driftEvents,
+                                baselineLockDate: store.lastBaselineLockDate
+                            )
+                            AuditReportGenerator.exportReportToFile(content: report, defaultName: "drifter_network_audit", fileExtension: "json")
+                        }
+
+                        Divider()
+
+                        Button("Copy Markdown to Clipboard") {
+                            let report = AuditReportGenerator.generateMarkdownReport(
+                                hosts: store.hosts,
+                                events: store.driftEvents,
+                                baselineLockDate: store.lastBaselineLockDate
+                            )
+                            AuditReportGenerator.copyReportToClipboard(content: report)
+                        }
+                    } label: {
+                        Label("Export Audit", systemImage: "square.and.arrow.up")
                     }
                     .buttonStyle(.bordered)
                     .focusable(false)
+
+                    if !store.driftEvents.isEmpty {
+                        Button("Clear History") {
+                            store.clearDriftEvents()
+                        }
+                        .buttonStyle(.bordered)
+                        .focusable(false)
+                    }
                 }
             }
             .padding()
@@ -122,11 +193,21 @@ private struct DriftAlertRowView: View {
                 }
 
                 if !event.acknowledged {
+                    Button("Approve") {
+                        store.approveDrift(for: event)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .controlSize(.small)
+                    .help("Approve this change and update authoritative baseline")
+                    .focusable(false)
+
                     Button("Ack") {
                         store.acknowledgeEvent(id: event.id)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .help("Acknowledge alert without modifying baseline")
                     .focusable(false)
                 }
             }

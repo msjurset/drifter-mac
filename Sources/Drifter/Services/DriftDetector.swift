@@ -25,29 +25,33 @@ public final class DriftDetector {
                     ))
                 }
 
-                // Check port drift
-                let oldPorts = Set(oldHost.openPorts)
+                // Check port drift against baselinePorts if defined, otherwise oldHost.openPorts
+                let referencePorts = Set(oldHost.baselinePorts ?? oldHost.openPorts)
                 let currentPorts = Set(newHost.openPorts)
 
-                let openedPorts = currentPorts.subtracting(oldPorts)
+                let openedPorts = currentPorts.subtracting(referencePorts)
                 for port in openedPorts {
                     events.append(DriftEvent(
                         hostId: oldHost.id,
                         hostIp: newHost.ip,
                         hostname: newHost.hostname,
                         type: "port_opened",
-                        detail: "Port \(port) was newly opened on \(newHost.hostname.isEmpty ? newHost.ip : newHost.hostname)"
+                        detail: oldHost.baselinePorts != nil
+                            ? "Port \(port) newly opened on \(newHost.hostname.isEmpty ? newHost.ip : newHost.hostname) (baseline divergence)"
+                            : "Port \(port) was newly opened on \(newHost.hostname.isEmpty ? newHost.ip : newHost.hostname)"
                     ))
                 }
 
-                let closedPorts = oldPorts.subtracting(currentPorts)
+                let closedPorts = referencePorts.subtracting(currentPorts)
                 for port in closedPorts {
                     events.append(DriftEvent(
                         hostId: oldHost.id,
                         hostIp: newHost.ip,
                         hostname: newHost.hostname,
                         type: "port_closed",
-                        detail: "Port \(port) closed on \(newHost.hostname.isEmpty ? newHost.ip : newHost.hostname)"
+                        detail: oldHost.baselinePorts != nil
+                            ? "Port \(port) closed on \(newHost.hostname.isEmpty ? newHost.ip : newHost.hostname) (baseline divergence)"
+                            : "Port \(port) closed on \(newHost.hostname.isEmpty ? newHost.ip : newHost.hostname)"
                     ))
                 }
 
@@ -57,20 +61,28 @@ public final class DriftDetector {
                     merged.ip = newHost.ip
                     merged.hostname = newHost.hostname.isEmpty ? oldHost.hostname : newHost.hostname
                     merged.openPorts = newHost.openPorts
-                    merged.status = !openedPorts.isEmpty ? "drift" : "online"
+                    merged.status = (!openedPorts.isEmpty || !closedPorts.isEmpty) ? "drift" : "online"
                     merged.lastSeen = Date()
                     updatedHosts[idx] = merged
                 }
             } else {
                 // New host discovered
+                var itemToAdd = newHost
+                let hasBaseline = existingHosts.contains(where: { $0.baselinePorts != nil })
+                if hasBaseline {
+                    itemToAdd.isApprovedHost = false
+                    itemToAdd.status = "drift"
+                }
                 events.append(DriftEvent(
-                    hostId: newHost.id,
-                    hostIp: newHost.ip,
-                    hostname: newHost.hostname,
+                    hostId: itemToAdd.id,
+                    hostIp: itemToAdd.ip,
+                    hostname: itemToAdd.hostname,
                     type: "new_host",
-                    detail: "New host discovered at \(newHost.ip) (\(newHost.vendor.isEmpty ? "Unknown" : newHost.vendor))"
+                    detail: hasBaseline
+                        ? "New unapproved host discovered at \(newHost.ip) (\(newHost.vendor.isEmpty ? "Unknown" : newHost.vendor))"
+                        : "New host discovered at \(newHost.ip) (\(newHost.vendor.isEmpty ? "Unknown" : newHost.vendor))"
                 ))
-                updatedHosts.append(newHost)
+                updatedHosts.append(itemToAdd)
             }
         }
 
