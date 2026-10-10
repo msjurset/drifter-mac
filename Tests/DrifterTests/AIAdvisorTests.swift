@@ -97,4 +97,31 @@ final class AIAdvisorTests: XCTestCase {
         XCTAssertEqual(result.summary, plain)
         XCTAssertFalse(result.recommendations.isEmpty)
     }
+
+    func testAIKeyResolverClean() {
+        XCTAssertEqual(AIKeyResolver.clean("  sk-test-12345  "), "sk-test-12345")
+        XCTAssertEqual(AIKeyResolver.clean("\"op://Private/Stash Gemini/password\""), "op://Private/Stash Gemini/password")
+        XCTAssertEqual(AIKeyResolver.clean("'op://Vault/Item/field'"), "op://Vault/Item/field")
+        XCTAssertEqual(AIKeyResolver.clean("`op://Vault/Item/field`"), "op://Vault/Item/field")
+        XCTAssertEqual(AIKeyResolver.clean("\"'op://Vault/Item/field'\""), "op://Vault/Item/field")
+    }
+
+    func testAIKeyResolverIsReference() {
+        XCTAssertTrue(AIKeyResolver.isReference("op://Private/Item/password"))
+        XCTAssertTrue(AIKeyResolver.isReference("\"op://Private/Item/password\""))
+        XCTAssertTrue(AIKeyResolver.isReference("  OP://vault/item/field  "))
+        XCTAssertFalse(AIKeyResolver.isReference("sk-ant-api03-12345"))
+        XCTAssertFalse(AIKeyResolver.isReference("http://localhost:11434"))
+        XCTAssertFalse(AIKeyResolver.isReference(""))
+    }
+
+    func testAIKeyResolverPassthroughPlainKey() async throws {
+        let plain = "sk-plain-test-key"
+        let resolved = try await AIKeyResolver.resolve(plain)
+        XCTAssertEqual(resolved, plain)
+
+        let quotedPlain = "\"sk-quoted-key\""
+        let resolvedQuoted = try await AIKeyResolver.resolve(quotedPlain)
+        XCTAssertEqual(resolvedQuoted, "sk-quoted-key")
+    }
 }

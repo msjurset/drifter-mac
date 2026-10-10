@@ -306,15 +306,43 @@ struct SettingsView: View {
                                 }
                             } else {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("\(aiProvider.rawValue) API Key:")
+                                    Text("\(aiProvider.rawValue) API Key / 1Password Reference:")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                     FilterField(
-                                        placeholder: "Paste your API key here",
+                                        placeholder: "Paste API key or op://vault/item/field",
                                         text: $aiApiKey,
                                         style: .rounded
                                     )
                                     .frame(height: 28)
+
+                                    if AIKeyResolver.isReference(aiApiKey) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: AIKeyResolver.opAvailable ? "lock.shield.fill" : "exclamationmark.triangle.fill")
+                                                .font(.caption2)
+                                                .foregroundStyle(AIKeyResolver.opAvailable ? .green : .orange)
+                                            if AIKeyResolver.opAvailable {
+                                                Text("1Password secret reference detected. Resolved via `op read` on each request; raw key never stored on disk.")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.secondary)
+                                            } else {
+                                                Text("1Password CLI (`op`) not found. Install with `brew install 1password-cli` and run `op signin`.")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.orange)
+                                            }
+                                        }
+                                        .padding(.top, 2)
+                                    } else {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "key.fill")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                            Text("Stored locally in macOS app preferences. Supports 1Password `op://vault/item/field` references.")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding(.top, 2)
+                                    }
 
                                     Text("Model Name (Optional Override):")
                                         .font(.caption)
@@ -325,16 +353,6 @@ struct SettingsView: View {
                                         style: .rounded
                                     )
                                     .frame(height: 28)
-
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "key.fill")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                        Text("Stored locally in macOS app preferences. Sent directly to \(aiProvider.rawValue) with zero telemetry.")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(.top, 2)
                                 }
                             }
 
@@ -346,7 +364,7 @@ struct SettingsView: View {
                                         ProgressView()
                                             .controlSize(.small)
                                             .padding(.trailing, 2)
-                                        Text("Testing...")
+                                        Text(AIKeyResolver.isReference(aiApiKey) ? "Authenticating via 1Password..." : "Testing...")
                                     } else {
                                         Label("Test Connection", systemImage: "network")
                                     }
@@ -354,6 +372,7 @@ struct SettingsView: View {
                                 .buttonStyle(.bordered)
                                 .focusable(false)
                                 .disabled(isTestingConnection)
+                                .help(AIKeyResolver.isReference(aiApiKey) ? "Resolves secret reference via 1Password CLI (Touch ID) and verifies API connectivity" : "Tests provider connectivity and API key validity")
 
                                 if let status = testConnectionStatus {
                                     HStack(spacing: 4) {
@@ -396,7 +415,7 @@ struct SettingsView: View {
             showMenuBarItem = store.settings.showMenuBarItem
             aiEnabled = store.settings.aiSettings.enabled
             aiProvider = store.settings.aiSettings.provider
-            aiApiKey = store.settings.aiSettings.apiKey
+            aiApiKey = AIKeyResolver.clean(store.settings.aiSettings.apiKey)
             aiEndpointURL = store.settings.aiSettings.endpointURL
             aiCustomModelName = store.settings.aiSettings.customModelName
         }
@@ -412,14 +431,18 @@ struct SettingsView: View {
         updated.runbookURLTemplate = runbookURLTemplate
         updated.backgroundScanIntervalMinutes = backgroundScanInterval
         updated.showMenuBarItem = showMenuBarItem
+        let cleanedKey = AIKeyResolver.clean(aiApiKey)
         updated.aiSettings = AISettings(
             enabled: aiEnabled,
             provider: aiProvider,
-            apiKey: aiApiKey,
+            apiKey: cleanedKey,
             endpointURL: aiEndpointURL,
             customModelName: aiCustomModelName
         )
         store.updateSettings(updated)
+        Task {
+            await AIKeyResolver.clearCache()
+        }
 
         withAnimation {
             showSavedToast = true
@@ -438,7 +461,7 @@ struct SettingsView: View {
         let currentSettings = AISettings(
             enabled: aiEnabled,
             provider: aiProvider,
-            apiKey: aiApiKey,
+            apiKey: AIKeyResolver.clean(aiApiKey),
             endpointURL: aiEndpointURL,
             customModelName: aiCustomModelName
         )

@@ -60,12 +60,7 @@ public final class AIAdvisorService: Sendable {
 
     /// Verifies provider connectivity and API key validity with a lightweight ping
     public func testConnection(settings: AISettings) async throws -> String {
-        guard settings.enabled else {
-            throw AIAdvisorError.disabled
-        }
-        if settings.provider.requiresAPIKey && settings.apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-            throw AIAdvisorError.missingAPIKey(settings.provider)
-        }
+        let effectiveSettings = try await resolveEffectiveSettings(settings)
 
         let systemPrompt = "Respond with strictly valid JSON: {\"status\": \"ok\", \"message\": \"Drifter Advisor connected\"}"
         let userPrompt = "Ping test"
@@ -73,7 +68,7 @@ public final class AIAdvisorService: Sendable {
         let responseText = try await dispatchQuery(
             systemPrompt: systemPrompt,
             userPrompt: userPrompt,
-            settings: settings,
+            settings: effectiveSettings,
             maxTokens: 50
         )
 
@@ -88,9 +83,6 @@ public final class AIAdvisorService: Sendable {
         guard settings.enabled else {
             throw AIAdvisorError.disabled
         }
-        if settings.provider.requiresAPIKey && settings.apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-            throw AIAdvisorError.missingAPIKey(settings.provider)
-        }
 
         let unackEvents = events.filter { !$0.acknowledged }
         guard !unackEvents.isEmpty else {
@@ -102,6 +94,8 @@ public final class AIAdvisorService: Sendable {
                 modelName: settings.activeModel
             )
         }
+
+        let effectiveSettings = try await resolveEffectiveSettings(settings)
 
         // Build compact JSON payload
         var eventItems: [[String: Any]] = []
@@ -138,7 +132,7 @@ public final class AIAdvisorService: Sendable {
         let responseText = try await dispatchQuery(
             systemPrompt: systemPrompt,
             userPrompt: jsonInput,
-            settings: settings,
+            settings: effectiveSettings,
             maxTokens: 350
         )
 
@@ -151,12 +145,7 @@ public final class AIAdvisorService: Sendable {
 
     /// Evaluates the security posture and open ports of an individual host
     public func analyzeHostSecurity(host: HostItem, events: [DriftEvent], settings: AISettings) async throws -> AIAnalysisResult {
-        guard settings.enabled else {
-            throw AIAdvisorError.disabled
-        }
-        if settings.provider.requiresAPIKey && settings.apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-            throw AIAdvisorError.missingAPIKey(settings.provider)
-        }
+        let effectiveSettings = try await resolveEffectiveSettings(settings)
 
         let hostEvents = events.filter { $0.hostId == host.id || $0.hostIp == host.ip }
         let payload: [String: Any] = [
@@ -189,7 +178,7 @@ public final class AIAdvisorService: Sendable {
         let responseText = try await dispatchQuery(
             systemPrompt: systemPrompt,
             userPrompt: jsonInput,
-            settings: settings,
+            settings: effectiveSettings,
             maxTokens: 350
         )
 
@@ -198,6 +187,21 @@ public final class AIAdvisorService: Sendable {
             providerName: settings.provider.rawValue,
             modelName: settings.activeModel
         )
+    }
+
+    private func resolveEffectiveSettings(_ settings: AISettings) async throws -> AISettings {
+        guard settings.enabled else {
+            throw AIAdvisorError.disabled
+        }
+        var effective = settings
+        if effective.provider.requiresAPIKey {
+            let cleaned = AIKeyResolver.clean(effective.apiKey)
+            guard !cleaned.isEmpty else {
+                throw AIAdvisorError.missingAPIKey(effective.provider)
+            }
+            effective.apiKey = try await AIKeyResolver.resolve(cleaned)
+        }
+        return effective
     }
 
     // MARK: - Provider Query Dispatching
