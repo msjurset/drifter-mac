@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HostListView: View {
     @ObservedObject var store: DrifterStore
-    var activeTab: MainView.SidebarTab
+    var activeTab: SidebarTab
     @Binding var selectedHostId: String?
     @Binding var filterText: String
 

@@ -1,5 +1,7 @@
 import AppKit
 import SwiftUI
+import Combine
+import UserNotifications
 
 @MainActor
 public final class MenuBarManager: NSObject {
@@ -7,21 +9,27 @@ public final class MenuBarManager: NSObject {
 
     private var statusItem: NSStatusItem?
     private weak var store: DrifterStore?
+    private var cancellables = Set<AnyCancellable>()
 
     public func setup(store: DrifterStore) {
         self.store = store
-        guard statusItem == nil else { return }
-
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        if let button = item.button {
-            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-            if let image = NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: "Drifter Network Watchdog")?.withSymbolConfiguration(config) {
-                image.isTemplate = true
-                button.image = image
+        requestNotificationPermissions()
+        
+        // Subscribe to driftEvents updates from the store
+        cancellables.removeAll()
+        store.$driftEvents
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateMenu()
             }
-            button.toolTip = "Drifter Network Watchdog"
+            .store(in: &cancellables)
+
+        guard statusItem == nil else {
+            updateMenu()
+            return
         }
 
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let menu = NSMenu()
         menu.delegate = self
         item.menu = menu
@@ -38,11 +46,40 @@ public final class MenuBarManager: NSObject {
         menu.addItem(titleItem)
 
         if let store {
-            let unack = store.driftEvents.filter { !$0.acknowledged }.count
-            let statusText = unack > 0 ? "⚠️ \(unack) Drift Alert(s) Active" : "✅ Network Baseline Clean"
-            let statusMenuItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
-            statusMenuItem.isEnabled = false
+            let unackEvents = store.driftEvents.filter { !$0.acknowledged }
+            let unackCount = unackEvents.count
+            updateStatusIcon(unackCount: unackCount)
+
+            let statusText = unackCount > 0 ? "⚠️ \(unackCount) Drift Alert(s) Active" : "✅ Network Baseline Clean"
+            let statusMenuItem = NSMenuItem(title: statusText, action: unackCount > 0 ? #selector(openDriftAlertsTab) : nil, keyEquivalent: "")
+            if unackCount > 0 {
+                statusMenuItem.target = self
+            } else {
+                statusMenuItem.isEnabled = false
+            }
             menu.addItem(statusMenuItem)
+
+            if !unackEvents.isEmpty {
+                menu.addItem(NSMenuItem.separator())
+                
+                let headerItem = NSMenuItem(title: "Active Drift Alerts:", action: #selector(openDriftAlertsTab), keyEquivalent: "")
+                headerItem.target = self
+                menu.addItem(headerItem)
+
+                for event in unackEvents.prefix(5) {
+                    let hostName = event.hostname.isEmpty ? event.hostIp : event.hostname
+                    let itemTitle = " • [\(event.type.replacingOccurrences(of: "_", with: " ").capitalized)] \(hostName): \(event.detail)"
+                    let alertItem = NSMenuItem(title: itemTitle, action: #selector(openDriftAlertsTab), keyEquivalent: "")
+                    alertItem.target = self
+                    menu.addItem(alertItem)
+                }
+
+                if unackEvents.count > 5 {
+                    let moreItem = NSMenuItem(title: " ...and \(unackEvents.count - 5) more alert(s)", action: #selector(openDriftAlertsTab), keyEquivalent: "")
+                    moreItem.target = self
+                    menu.addItem(moreItem)
+                }
+            }
         }
 
         menu.addItem(NSMenuItem.separator())
@@ -60,6 +97,48 @@ public final class MenuBarManager: NSObject {
         let quitItem = NSMenuItem(title: "Quit Drifter", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+    }
+
+    @objc private func openDriftAlertsTab() {
+        store?.activeTab = .driftAlerts
+        showMainWindow()
+    }
+
+    private func updateStatusIcon(unackCount: Int) {
+        guard let button = statusItem?.button else { return }
+        let imageName = unackCount > 0 ? "exclamationmark.shield.fill" : "waveform.path.ecg"
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+        if let image = NSImage(systemSymbolName: imageName, accessibilityDescription: "Drifter Network Watchdog")?.withSymbolConfiguration(config) {
+            image.isTemplate = true
+            button.image = image
+        }
+        button.toolTip = unackCount > 0 ? "Drifter: \(unackCount) active drift alert(s)" : "Drifter Network Watchdog"
+    }
+
+    private var isRunningInTestEnvironment: Bool {
+        NSClassFromString("XCTestCase") != nil ||
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+        (Bundle.main.bundleIdentifier?.lowercased().contains("xctest") ?? false)
+    }
+
+    private func requestNotificationPermissions() {
+        guard !isRunningInTestEnvironment else { return }
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+    }
+
+    public func postNotification(for event: DriftEvent) {
+        guard store?.settings.notifyOnDrift ?? true else { return }
+        guard !isRunningInTestEnvironment else { return }
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Drifter Alert: \(event.type.replacingOccurrences(of: "_", with: " ").capitalized)"
+        content.subtitle = event.hostname.isEmpty ? event.hostIp : event.hostname
+        content.body = event.detail
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: event.id, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 
     @objc private func showMainWindow() {

@@ -9,11 +9,78 @@ struct HostDetailView: View {
     let host: HostItem
     @ObservedObject var store: DrifterStore
     @State private var selectedPortForExplainer: Int?
+    @State private var headerWidth: CGFloat = 0
+
+    private var actionItems: [ActionPillItem] {
+        var list: [ActionPillItem] = [
+            ActionPillItem(
+                id: "ssh",
+                title: "SSH",
+                icon: "terminal.fill",
+                help: "Launch interactive SSH terminal session to \(host.ip) in Ghostty",
+                isProminent: false,
+                action: {
+                    TerminalLauncher.launchSSH(ip: host.ip, hostname: host.hostname, store: store)
+                }
+            )
+        ]
+
+        if host.openPorts.contains(80) || host.openPorts.contains(443) || host.openPorts.contains(8123) || host.openPorts.contains(8080) {
+            let scheme = host.openPorts.contains(443) ? "https" : "http"
+            let portStr = host.openPorts.contains(8123) ? ":8123" : (host.openPorts.contains(8080) ? ":8080" : "")
+            list.append(
+                ActionPillItem(
+                    id: "web",
+                    title: "Open Web",
+                    icon: "safari.fill",
+                    help: "Open web interface (\(scheme)://\(host.ip)\(portStr)) in default browser",
+                    action: {
+                        if let url = URL(string: "\(scheme)://\(host.ip)\(portStr)") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                )
+            )
+        }
+
+        if store.settings.enableRunbookIntegration {
+            list.append(
+                ActionPillItem(
+                    id: "runbook",
+                    title: "Runbook",
+                    icon: "book.closed.fill",
+                    help: "Open operational runbook for \(host.hostname.isEmpty ? host.ip : host.hostname) in Runbook.app",
+                    action: {
+                        RunbookLauncher.launchRunbook(host: host, store: store)
+                    }
+                )
+            )
+        }
+
+        list.append(
+            ActionPillItem(
+                id: "forget",
+                title: "Forget",
+                icon: "trash",
+                help: "Remove host profile and port tracking records from Drifter watchdog",
+                isDestructive: true,
+                action: {
+                    store.removeHost(id: host.id)
+                }
+            )
+        )
+
+        return list
+    }
+
+    private var isHeaderConstrained: Bool {
+        headerWidth > 0 && headerWidth < 560
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .center, spacing: 16) {
                     ZStack {
                         Circle()
                             .fill(statusColor(host.status).opacity(0.15))
@@ -45,51 +112,18 @@ struct HostDetailView: View {
 
                     Spacer()
 
-                    HStack(spacing: 8) {
-                        Button {
-                            TerminalLauncher.launchSSH(ip: host.ip, hostname: host.hostname, store: store)
-                        } label: {
-                            Label("SSH", systemImage: "terminal.fill")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .focusable(false)
-
-                        if host.openPorts.contains(80) || host.openPorts.contains(443) || host.openPorts.contains(8123) || host.openPorts.contains(8080) {
-                            Button {
-                                let scheme = host.openPorts.contains(443) ? "https" : "http"
-                                let portStr = host.openPorts.contains(8123) ? ":8123" : (host.openPorts.contains(8080) ? ":8080" : "")
-                                if let url = URL(string: "\(scheme)://\(host.ip)\(portStr)") {
-                                    NSWorkspace.shared.open(url)
-                                }
-                            } label: {
-                                Label("Open Web", systemImage: "safari.fill")
-                            }
-                            .buttonStyle(.bordered)
-                            .focusable(false)
-                        }
-
-                        if store.settings.enableRunbookIntegration {
-                            Button {
-                                RunbookLauncher.launchRunbook(host: host, store: store)
-                            } label: {
-                                Label("Runbook", systemImage: "book.closed.fill")
-                            }
-                            .buttonStyle(.bordered)
-                            .focusable(false)
-                        }
-
-                        Button(role: .destructive) {
-                            store.removeHost(id: host.id)
-                        } label: {
-                            Label("Forget", systemImage: "trash")
-                        }
-                        .buttonStyle(.bordered)
-                        .focusable(false)
-                    }
+                    CollapsibleActionRow(items: actionItems, isConstrained: isHeaderConstrained)
                 }
                 .padding()
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { headerWidth = geo.size.width }
+                            .onChange(of: geo.size.width) { _, newWidth in headerWidth = newWidth }
+                    }
+                )
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Device Profile")

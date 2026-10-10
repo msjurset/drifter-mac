@@ -2,20 +2,27 @@ import SwiftUI
 
 struct MainView: View {
     @StateObject var store = DrifterStore()
-    @State private var selectedHostId: String? = nil
     @State private var filterText: String = ""
-    @State private var activeTab: SidebarTab = .allHosts
 
-    enum SidebarTab: Hashable {
-        case allHosts
-        case driftAlerts
-        case servers
-        case iotDevices
-        case settings
+    @AppStorage("drifter_sidebarWidth") private var sidebarWidth: Double = 220
+    @AppStorage("drifter_hostListWidth") private var hostListWidth: Double = 280
+
+    private var sidebarWidthBinding: Binding<CGFloat> {
+        Binding<CGFloat>(
+            get: { CGFloat(sidebarWidth) },
+            set: { sidebarWidth = Double($0) }
+        )
+    }
+
+    private var hostListWidthBinding: Binding<CGFloat> {
+        Binding<CGFloat>(
+            get: { CGFloat(hostListWidth) },
+            set: { hostListWidth = Double($0) }
+        )
     }
 
     var selectedHost: HostItem? {
-        store.hosts.first(where: { $0.id == selectedHostId })
+        store.hosts.first(where: { $0.id == store.selectedHostId })
     }
 
     var serverCount: Int {
@@ -29,7 +36,7 @@ struct MainView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                List(selection: $activeTab) {
+                List(selection: $store.activeTab) {
                     Section("Network Dashboard") {
                         Label("All Hosts (\(store.hosts.count))", systemImage: "network")
                             .tag(SidebarTab.allHosts)
@@ -94,27 +101,37 @@ struct MainView: View {
                     .padding(10)
                 }
             }
-            .frame(width: 220)
+            .frame(width: CGFloat(sidebarWidth))
 
-            Divider()
+            DraggableDivider(
+                width: sidebarWidthBinding,
+                minWidth: 160,
+                maxWidth: 400,
+                defaultWidth: 220
+            )
 
-            if activeTab == .driftAlerts {
+            if store.activeTab == .driftAlerts {
                 DriftAlertsView(store: store)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if activeTab == .settings {
+            } else if store.activeTab == .settings {
                 SettingsView(store: store)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HStack(spacing: 0) {
                     HostListView(
                         store: store,
-                        activeTab: activeTab,
-                        selectedHostId: $selectedHostId,
+                        activeTab: store.activeTab,
+                        selectedHostId: $store.selectedHostId,
                         filterText: $filterText
                     )
-                    .frame(width: 280)
+                    .frame(width: CGFloat(hostListWidth))
 
-                    Divider()
+                    DraggableDivider(
+                        width: hostListWidthBinding,
+                        minWidth: 200,
+                        maxWidth: 500,
+                        defaultWidth: 280
+                    )
 
                     if let selectedHost {
                         HostDetailView(host: selectedHost, store: store)

@@ -101,8 +101,18 @@ public struct DriftEvent: Identifiable, Codable, Equatable, Hashable {
     }
 }
 
+public enum SidebarTab: Hashable, Codable {
+    case allHosts
+    case driftAlerts
+    case servers
+    case iotDevices
+    case settings
+}
+
 @MainActor
 public final class DrifterStore: ObservableObject {
+    @Published public var activeTab: SidebarTab = .allHosts
+    @Published public var selectedHostId: String? = nil
     @Published public private(set) var hosts: [HostItem] = []
     @Published public private(set) var driftEvents: [DriftEvent] = []
     @Published public var settings: AppSettings = AppSettings()
@@ -182,6 +192,7 @@ public final class DrifterStore: ObservableObject {
     public func addDriftEvent(_ event: DriftEvent) {
         driftEvents.insert(event, at: 0)
         saveStore()
+        MenuBarManager.shared.postNotification(for: event)
     }
 
     public func acknowledgeEvent(id: String) {

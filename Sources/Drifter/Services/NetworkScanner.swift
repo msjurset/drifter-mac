@@ -20,7 +20,7 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
             let portsToProbe = [22, 80, 443, 8123, 53, 5000, 8080]
             
             for port in portsToProbe {
-                if await checkPort(ip: ip, port: port, timeout: 0.15) {
+                if await checkPort(ip: ip, port: port, timeout: 0.30) {
                     openPorts.append(port)
                 }
             }
