@@ -18,19 +18,37 @@ public struct AppSettings: Codable, Equatable {
     public var notifyOnDrift: Bool
     public var enableRunbookIntegration: Bool
     public var runbookURLTemplate: String
+    public var backgroundScanIntervalMinutes: Int
+
+    enum CodingKeys: String, CodingKey {
+        case preferredTerminal, defaultSSHUser, customTerminalCommand, notifyOnDrift, enableRunbookIntegration, runbookURLTemplate, backgroundScanIntervalMinutes
+    }
 
     public init(preferredTerminal: TerminalApp = .ghostty,
                 defaultSSHUser: String = "",
                 customTerminalCommand: String = "ghostty -e ssh {ip}",
                 notifyOnDrift: Bool = true,
                 enableRunbookIntegration: Bool = true,
-                runbookURLTemplate: String = "runbook://execute?template=security-audit&host={ip}") {
+                runbookURLTemplate: String = "runbook://execute?template=security-audit&host={ip}",
+                backgroundScanIntervalMinutes: Int = 0) {
         self.preferredTerminal = preferredTerminal
         self.defaultSSHUser = defaultSSHUser
         self.customTerminalCommand = customTerminalCommand
         self.notifyOnDrift = notifyOnDrift
         self.enableRunbookIntegration = enableRunbookIntegration
         self.runbookURLTemplate = runbookURLTemplate
+        self.backgroundScanIntervalMinutes = backgroundScanIntervalMinutes
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        preferredTerminal = try container.decodeIfPresent(TerminalApp.self, forKey: .preferredTerminal) ?? .ghostty
+        defaultSSHUser = try container.decodeIfPresent(String.self, forKey: .defaultSSHUser) ?? ""
+        customTerminalCommand = try container.decodeIfPresent(String.self, forKey: .customTerminalCommand) ?? "ghostty -e ssh {ip}"
+        notifyOnDrift = try container.decodeIfPresent(Bool.self, forKey: .notifyOnDrift) ?? true
+        enableRunbookIntegration = try container.decodeIfPresent(Bool.self, forKey: .enableRunbookIntegration) ?? true
+        runbookURLTemplate = try container.decodeIfPresent(String.self, forKey: .runbookURLTemplate) ?? "runbook://execute?template=security-audit&host={ip}"
+        backgroundScanIntervalMinutes = try container.decodeIfPresent(Int.self, forKey: .backgroundScanIntervalMinutes) ?? 0
     }
 }
 

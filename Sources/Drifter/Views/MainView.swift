@@ -97,6 +97,17 @@ struct MainView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+
+                        if store.lastBaselineLockDate != nil {
+                            HStack(spacing: 4) {
+                                Image(systemName: "lock.shield.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.green)
+                                Text("Baseline: Locked")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                     .padding(10)
                 }

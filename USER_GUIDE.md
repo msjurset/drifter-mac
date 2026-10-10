@@ -8,13 +8,15 @@ Welcome to **Drifter**! This guide covers everything you need to know to monitor
 
 1. [Overview](#1-overview)
 2. [Getting Started & Local Network Access](#2-getting-started--local-network-access)
-3. [Network Discovery & Port Drift Auditing](#3-network-discovery--port-drift-auditing)
+3. [Network Discovery & Authoritative Baselining](#3-network-discovery--authoritative-baselining)
 4. [Searching & Filtering Hosts](#4-searching--filtering-hosts)
 5. [SSH Terminal & 1Password Touch ID Integration](#5-ssh-terminal--1password-touch-id-integration)
 6. [Runbook Automation Integration](#6-runbook-automation-integration)
-7. [Menu Bar Status Item](#7-menu-bar-status-item)
-8. [Settings & Customization](#8-settings--customization)
-9. [Data Storage & Privacy](#9-data-storage--privacy)
+7. [Deep Port Probing, Wake-on-LAN & Homelab Services](#7-deep-port-probing-wake-on-lan--homelab-services)
+8. [Menu Bar Status Item & Background Watchdog](#8-menu-bar-status-item--background-watchdog)
+9. [Exporting Network Security Audit Reports](#9-exporting-network-security-audit-reports)
+10. [Settings & Customization](#10-settings--customization)
+11. [Data Storage & Privacy](#11-data-storage--privacy)
 
 ---
 
@@ -42,17 +44,25 @@ When you launch Drifter for the first time:
 
 ---
 
-## 3. Network Discovery & Port Drift Auditing
+## 3. Network Discovery & Authoritative Baselining
 
 ### How Discovery Works
-- **ARP Table Parsing**: Scans active IP/MAC bindings on your local subnet (e.g. `192.168.86.0/24`).
+- **Subnet ARP Sweeping**: Automatically detects your active IPv4 subnet (e.g. `192.168.86.0/24`) and dispatches concurrent, non-blocking UDP probes to warm the macOS kernel ARP cache before querying `/usr/sbin/arp -a`.
 - **Port Probing**: Checks common infrastructure ports (`22` SSH, `53` DNS, `80` HTTP, `443` HTTPS, `8123` Home Assistant, `8080` Web Alt, `5000` Synology).
-- **mDNS Multicast**: Listens for Zeroconf/Bonjour broadcasts to identify service names and device categories.
+- **Native Bonjour Discovery (`NWBrowser`)**: Actively queries Zeroconf/Bonjour broadcasts to identify service names and device categories (`_home-assistant`, `_esphomelib`, `_matter`, `_smb`, `_airplay`, `_printer`).
+- **Expanded Hardware OUI Lookup**: Maps MAC addresses to hardware vendors including Espressif (ESP32/ESP8266), Raspberry Pi, Ubiquiti, Synology, Tuya, Sonoff, Philips Hue, Intel, Dell, Netgear, TP-Link, and Sonos.
+
+### Authoritative Baseline Evolution
+Drifter provides an authoritative baseline model:
+1. **Lock Baseline**: Click **Lock Baseline** in Drift Alerts or Settings to snapshot the entire current network state (all known hosts and open ports) as the authoritative gold master.
+2. **Incremental "Approve into Baseline"**: When legitimate changes occur (e.g. you spin up a new container on port 8006 or add a new device), click **Approve** on the alert card. This merges the change directly into that host's baseline without needing to reset or rebuild the rest of the network.
+3. **Rogue Host Detection**: If an unknown device joins an established network baseline, it is immediately flagged as `🔴 Unapproved / Rogue` with a drift alert.
 
 ### Drift Alerting
-Whenever Drifter detects a structural change (such as port 22 or port 80 opening on a host that previously had no open ports), it generates a **Drift Alert**. Drift alerts appear in:
+Whenever Drifter detects a structural change (new open port, closed port, IP lease change, or unapproved host), it generates a **Drift Alert**. Drift alerts appear in:
 - The **Drift Alerts** tab in the main sidebar.
 - The macOS **Menu Bar** icon badge.
+- Native macOS desktop notifications (when enabled).
 
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
 
@@ -121,20 +131,55 @@ Drifter ships with two starter runbooks (stored in `~/.runbook/books/`):
 
 ---
 
-## 7. Menu Bar Status Item
+---
 
-Drifter runs an unobtrusive macOS status item in the menu bar (`waveform.path.ecg` icon):
-- Displays the current number of active drift alerts.
-- Provides a quick menu to trigger network scans or open specific host details.
+## 7. Deep Port Probing, Wake-on-LAN & Homelab Services
+
+### On-Demand Deep Port Probing
+While general subnet sweeps test 7 common infrastructure ports to ensure instant scan times, clicking **Deep Scan** on any host detail card runs a high-speed concurrent probe of 23 common homelab, infrastructure, and database ports (`8006, 9000, 9443, 32400, 8123, 8096, 3000, 9090, 5000, 5001, 8443, 1883, 5432, 6379`, etc.).
+
+### Homelab Service Detection & Web Launchers
+When Drifter discovers known homelab microservices, it populates direct 1-click launcher badges on the host card:
+- **Proxmox VE** (`https://{ip}:8006`)
+- **Portainer** (`https://{ip}:9443` or `http://{ip}:9000`)
+- **Home Assistant** (`http://{ip}:8123`)
+- **Plex Media Server** (`http://{ip}:32400/web`)
+- **Jellyfin** (`http://{ip}:8096`)
+- **Cockpit** (`https://{ip}:9090`)
+- **Grafana** (`http://{ip}:3000`)
+- **Synology DSM** (`http://{ip}:5000` / `https://{ip}:5001`)
+
+### Wake-on-LAN (WoL)
+For offline or sleeping hosts with a recorded MAC address, click the **Wake** button in the header action bar. Drifter transmits a standard UDP broadcast magic packet (`0xFF * 6` + `MAC * 16`) across ports 9 and 7 to remotely power on the machine.
 
 ---
 
-## 8. Settings & Customization
+## 8. Menu Bar Status Item & Background Watchdog
+
+Drifter runs an unobtrusive macOS status item in the menu bar (`waveform.path.ecg` or `exclamationmark.shield.fill` icon):
+- **Live Alert Count**: Displays active drift count and details directly in the dropdown.
+- **Background Watchdog**: Automatically polls the local subnet in the background (configured in Settings: *Every 5m, 15m, 30m, 1h*, or *Manual Only*).
+- **Direct Actions**: Trigger on-demand scans, lock the authoritative baseline, or export audit reports directly from the menu bar.
+
+---
+
+## 9. Exporting Network Security Audit Reports
+
+Generate comprehensive network baseline and compliance reports at any time by clicking **Export Audit** in the Drift Alerts tab or Settings:
+- **Markdown (`.md`)**: A formatted GitHub Flavored Markdown document containing executive metrics (compliance %, rogue host count, port drift divergence), host inventory matrix, and unacknowledged security alerts.
+- **JSON (`.json`)**: A machine-readable export suitable for CI/CD pipelines, SIEM ingest, or homelab GitOps version control.
+- **Clipboard**: Copy formatted Markdown directly to the macOS clipboard for pasting into GitHub Issues, Obsidian, or Notion.
+
+---
+
+## 10. Settings & Customization
 
 Navigate to **Settings** in the sidebar to configure:
-- **Preferred Terminal Application**: Select Ghostty, Apple Terminal, iTerm2, or a custom launch command.
+- **Preferred Terminal Application**: Select Ghostty, Apple Terminal, iTerm2, or a custom launch command template.
 - **Default SSH Username**: Set a default username for SSH connections (if not defined in `~/.ssh/config`).
 - **Runbook URL Template**: Customize the deep-link query format.
+- **Background Watchdog Polling**: Select background scan frequency (Manual Only, 5 min, 15 min, 30 min, 1 hour).
+- **Baseline Management**: Snapshot and lock current state as the authoritative baseline.
 - **Drift Alert Notifications**: Enable or disable macOS desktop notifications.
 
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
@@ -143,8 +188,8 @@ Navigate to **Settings** in the sidebar to configure:
 
 ---
 
-## 9. Data Storage & Privacy
+## 11. Data Storage & Privacy
 
-Drifter is **100% local and offline**. No data ever leaves your Mac.
+Drifter is **100% local and offline**. No telemetry or host data ever leaves your Mac.
 - **Local Store Location**: `~/Library/Application Support/DrifterMac/drifter_store.json`
 - **Forgetting Hosts**: Click the **Forget** (🗑️) button on any host card to permanently delete a host baseline from your local store.

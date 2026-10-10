@@ -50,12 +50,14 @@ final class DrifterStoreTests: XCTestCase {
         var newSettings = store.settings
         newSettings.preferredTerminal = .ghostty
         newSettings.defaultSSHUser = "admin"
+        newSettings.backgroundScanIntervalMinutes = 15
         store.updateSettings(newSettings)
 
         // Reload store from file to verify atomic JSON persistence
         let reloadedStore = DrifterStore(storageFileURL: fileURL)
         XCTAssertEqual(reloadedStore.settings.preferredTerminal, .ghostty)
         XCTAssertEqual(reloadedStore.settings.defaultSSHUser, "admin")
+        XCTAssertEqual(reloadedStore.settings.backgroundScanIntervalMinutes, 15)
     }
 
     @MainActor

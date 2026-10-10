@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var notifyOnDrift: Bool = true
     @State private var enableRunbookIntegration: Bool = true
     @State private var runbookURLTemplate: String = "runbook://execute?template=security-audit&host={ip}"
+    @State private var backgroundScanInterval: Int = 0
     @State private var showSavedToast: Bool = false
 
     var body: some View {
@@ -136,6 +137,70 @@ struct SettingsView: View {
                                 updated.notifyOnDrift = newValue
                                 store.updateSettings(updated)
                             }
+
+                        Divider()
+
+                        Picker("Background Watchdog Polling:", selection: $backgroundScanInterval) {
+                            Text("Manual Only (Disabled)").tag(0)
+                            Text("Every 5 minutes").tag(5)
+                            Text("Every 15 minutes").tag(15)
+                            Text("Every 30 minutes").tag(30)
+                            Text("Every 1 hour").tag(60)
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: backgroundScanInterval) { _, newValue in
+                            var updated = store.settings
+                            updated.backgroundScanIntervalMinutes = newValue
+                            store.updateSettings(updated)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
+                // Authoritative Baseline & Compliance
+                VStack(alignment: .leading, spacing: 16) {
+                    Label("Authoritative Baseline & Compliance", systemImage: "lock.shield.fill")
+                        .font(.headline)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let lockDate = store.lastBaselineLockDate {
+                            HStack {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundStyle(.green)
+                                Text("Authoritative baseline locked on \(lockDate.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.subheadline)
+                            }
+                        } else {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                Text("No authoritative baseline established. Operating in rolling drift mode.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        HStack(spacing: 12) {
+                            Button("Lock Current Network as Baseline") {
+                                store.lockBaseline()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .focusable(false)
+
+                            Button("Export Network Audit Report (.md)") {
+                                let report = AuditReportGenerator.generateMarkdownReport(
+                                    hosts: store.hosts,
+                                    events: store.driftEvents,
+                                    baselineLockDate: store.lastBaselineLockDate
+                                )
+                                AuditReportGenerator.exportReportToFile(content: report, defaultName: "drifter_network_audit", fileExtension: "md")
+                            }
+                            .buttonStyle(.bordered)
+                            .focusable(false)
+                        }
                     }
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -152,6 +217,7 @@ struct SettingsView: View {
             notifyOnDrift = store.settings.notifyOnDrift
             enableRunbookIntegration = store.settings.enableRunbookIntegration
             runbookURLTemplate = store.settings.runbookURLTemplate
+            backgroundScanInterval = store.settings.backgroundScanIntervalMinutes
         }
     }
 
@@ -163,6 +229,7 @@ struct SettingsView: View {
         updated.notifyOnDrift = notifyOnDrift
         updated.enableRunbookIntegration = enableRunbookIntegration
         updated.runbookURLTemplate = runbookURLTemplate
+        updated.backgroundScanIntervalMinutes = backgroundScanInterval
         store.updateSettings(updated)
 
         withAnimation {

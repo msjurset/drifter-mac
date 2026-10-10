@@ -10,6 +10,7 @@ public final class MenuBarManager: NSObject {
     private var statusItem: NSStatusItem?
     private weak var store: DrifterStore?
     private var cancellables = Set<AnyCancellable>()
+    private var scanTimer: Timer?
 
     public func setup(store: DrifterStore) {
         self.store = store
@@ -24,6 +25,17 @@ public final class MenuBarManager: NSObject {
             }
             .store(in: &cancellables)
 
+        // Subscribe to settings changes to dynamically adjust watchdog timer
+        store.$settings
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.configureWatchdogTimer()
+                self?.updateMenu()
+            }
+            .store(in: &cancellables)
+
+        configureWatchdogTimer()
+
         guard statusItem == nil else {
             updateMenu()
             return
@@ -37,6 +49,40 @@ public final class MenuBarManager: NSObject {
         updateMenu()
     }
 
+    public func configureWatchdogTimer() {
+        scanTimer?.invalidate()
+        scanTimer = nil
+
+        guard let store else { return }
+        let intervalMins = store.settings.backgroundScanIntervalMinutes
+        guard intervalMins > 0 else { return }
+
+        let seconds = TimeInterval(intervalMins * 60)
+        scanTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.performWatchdogScan()
+            }
+        }
+    }
+
+    public func performWatchdogScan() {
+        guard let store, !store.isScanning else { return }
+        Task { @MainActor in
+            store.isScanning = true
+            let scanned = await NetworkScanner.shared.scanLocalSubnet()
+            let drift = DriftDetector.computeDrift(existingHosts: store.hosts, newHosts: scanned)
+            for updated in drift.updatedHosts {
+                store.updateHost(updated)
+            }
+            for event in drift.events {
+                store.addDriftEvent(event)
+            }
+            store.lastScanDate = Date()
+            store.isScanning = false
+            self.updateMenu()
+        }
+    }
+
     public func updateMenu() {
         guard let menu = statusItem?.menu else { return }
         menu.removeAllItems()
@@ -44,6 +90,12 @@ public final class MenuBarManager: NSObject {
         let titleItem = NSMenuItem(title: "Drifter Network Watchdog", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
+
+        let interval = store?.settings.backgroundScanIntervalMinutes ?? 0
+        let watchdogTitle = interval > 0 ? "Watchdog: Active (Every \(interval)m)" : "Watchdog: Manual Only"
+        let watchdogItem = NSMenuItem(title: watchdogTitle, action: nil, keyEquivalent: "")
+        watchdogItem.isEnabled = false
+        menu.addItem(watchdogItem)
 
         if let store {
             let unackEvents = store.driftEvents.filter { !$0.acknowledged }
@@ -92,11 +144,34 @@ public final class MenuBarManager: NSObject {
         scanItem.target = self
         menu.addItem(scanItem)
 
+        let baselineItem = NSMenuItem(title: "Lock Baseline Now", action: #selector(lockBaselineAction), keyEquivalent: "")
+        baselineItem.target = self
+        menu.addItem(baselineItem)
+
+        let exportItem = NSMenuItem(title: "Export Audit Report...", action: #selector(exportAuditAction), keyEquivalent: "")
+        exportItem.target = self
+        menu.addItem(exportItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit Drifter", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+    }
+
+    @objc private func lockBaselineAction() {
+        store?.lockBaseline()
+        updateMenu()
+    }
+
+    @objc private func exportAuditAction() {
+        guard let store else { return }
+        let report = AuditReportGenerator.generateMarkdownReport(
+            hosts: store.hosts,
+            events: store.driftEvents,
+            baselineLockDate: store.lastBaselineLockDate
+        )
+        AuditReportGenerator.exportReportToFile(content: report, defaultName: "drifter_network_audit", fileExtension: "md")
     }
 
     @objc private func openDriftAlertsTab() {

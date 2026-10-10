@@ -22,12 +22,17 @@
 
 ## Key Features
 
-- **Port Drift & Security Auditing**: Automatically detects when network hosts open new ports, close existing ports, or change IP lease assignments.
-- **Subnet & mDNS Service Discovery**: Scans local ARP tables, probes common service ports (SSH, HTTP, HTTPS, Home Assistant, DNS, SMB), and parses mDNS broadcast tags (`_home-assistant._tcp`, `_http._tcp`).
-- **Terminal & 1Password Touch ID Integration**: Launch SSH terminal sessions in **Ghostty**, Apple Terminal, or iTerm2. Resolves `~/.ssh/config` host aliases (e.g. `pi-hole`, `ha`, `wrt`) and passes `SSH_AUTH_SOCK` for Touch ID key authentication.
-- **Runbook Automation Deep-Linking**: One-click integration with [Runbook](https://github.com/msjurset/runbook-mac) (`runbook://execute?template=security-audit&host={ip}`) to launch automated security audits and triage procedures.
-- **Menu Bar Status Item**: Native macOS menu bar item with live drift alerts and category status.
-- **100% Offline & Local**: Stores all scan baselines, host profiles, and drift logs locally in JSON state. Zero telemetry, zero cloud dependencies.
+- **Authoritative Baseline & Granular Evolution**: Snapshot and lock your known-good network state. Incremental "Approve into Baseline" allows seamless evolution when you add services, without blowing away the entire network baseline.
+- **Port Drift & Rogue Host Detection**: Detects newly opened ports, closed ports, IP changes, and unapproved rogue devices joining the subnet.
+- **Subnet ARP Sweeper**: Non-blocking UDP sweeper warms the kernel ARP cache across the active `/24` subnet, ensuring quiet IoT devices and sleeping microcontrollers are never missed.
+- **Native Bonjour Discovery**: Uses Apple's `Network.framework` (`NWBrowser`) to discover live mDNS services (`_home-assistant`, `_esphomelib`, `_matter`, `_smb`, `_airplay`, `_printer`, `_ssh`).
+- **Deep Port Probe & Homelab Service Detection**: On-demand 23-port scanner detecting Proxmox VE, Portainer, Home Assistant, Plex, Cockpit, Grafana, Synology DSM, MQTT, and databases with smart 1-click web launcher badges.
+- **Wake-on-LAN (WoL)**: Native magic packet sender (`0xFF * 6` + `MAC * 16`) to power on or wake sleeping workstations, servers, and NAS nodes.
+- **Network Security Audit Reports**: One-click export to GitHub Flavored Markdown (`.md`) or structured JSON (`.json`) inventory reports.
+- **Background Watchdog**: Configurable background scan timer with native desktop notifications and Menu Bar badge alerts.
+- **Terminal & 1Password Touch ID Integration**: Launch SSH terminal sessions in **Ghostty**, Apple Terminal, or iTerm2 with `~/.ssh/config` alias resolution and `SSH_AUTH_SOCK` Touch ID key authentication.
+- **Runbook Automation Deep-Linking**: One-click integration with [Runbook](https://github.com/msjurset/runbook-mac) (`runbook://execute?template=security-audit&host={ip}`).
+- **100% Offline & Local**: Zero telemetry, zero cloud dependencies. All state persisted locally in JSON.
 
 ---
 
