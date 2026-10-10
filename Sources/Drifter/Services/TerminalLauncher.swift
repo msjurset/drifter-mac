@@ -132,6 +132,23 @@ public final class TerminalLauncher {
         }
     }
 
+    @MainActor
+    public static func launchTest(store: DrifterStore) {
+        let settings = store.settings
+        log("launchTest starting for preferred terminal: \(settings.preferredTerminal.rawValue)")
+
+        switch settings.preferredTerminal {
+        case .ghostty:
+            launchGhosttyTest(settings: settings)
+        case .terminal:
+            launchAppleTerminalTest(settings: settings)
+        case .iterm:
+            launchITermTest(settings: settings)
+        case .custom:
+            launchCustomTest(settings: settings)
+        }
+    }
+
     private static func launchGhostty(sshTarget: String) {
         log("launchGhostty starting via .command script for \(sshTarget)")
         let workspace = NSWorkspace.shared
@@ -162,7 +179,17 @@ public final class TerminalLauncher {
         #!/bin/zsh
         export SSH_AUTH_SOCK="\(opSock)"
         echo "Connecting to \(sshTarget) via SSH..."
-        exec ssh \(sshTarget)
+        ssh \(sshTarget)
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+            echo ""
+            echo "----------------------------------------------------------"
+            echo "SSH disconnected with exit code $EXIT_CODE."
+            echo "Starting interactive shell for troubleshooting..."
+            echo "----------------------------------------------------------"
+            echo ""
+            exec zsh -l
+        fi
         """
 
         do {
@@ -182,6 +209,104 @@ public final class TerminalLauncher {
         } catch {
             log("Failed to write temporary .command script: \(error)")
         }
+    }
+
+    private static func launchGhosttyTest(settings: AppSettings) {
+        log("launchGhosttyTest starting")
+        let workspace = NSWorkspace.shared
+        let ghosttyAppURL: URL? = {
+            if let url = workspace.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") {
+                return url
+            }
+            if FileManager.default.fileExists(atPath: "/Applications/Ghostty.app") {
+                return URL(fileURLWithPath: "/Applications/Ghostty.app")
+            }
+            return nil
+        }()
+
+        guard let ghosttyAppURL else {
+            log("Ghostty.app not found. Falling back to Apple Terminal.")
+            launchAppleTerminalTest(settings: settings)
+            return
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let scriptURL = tempDir.appendingPathComponent("drifter_terminal_test.command")
+
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let opSock = "\(home)/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+
+        let scriptContent = """
+        #!/bin/zsh
+        export SSH_AUTH_SOCK="\(opSock)"
+        clear
+        echo "=========================================================="
+        echo "  Drifter Terminal & SSH Dispatch Test"
+        echo "=========================================================="
+        echo "✓ Preferred Terminal : Ghostty"
+        if [ -S "$SSH_AUTH_SOCK" ]; then
+            echo "✓ 1Password SSH Agent: Connected ($SSH_AUTH_SOCK)"
+        else
+            echo "• 1Password SSH Agent: Socket not detected at standard path"
+        fi
+        echo "✓ OpenSSH Client     : $(ssh -V 2>&1)"
+        echo "----------------------------------------------------------"
+        echo "Terminal dispatch is configured and operational!"
+        echo "Click 'SSH' on any active host card in Drifter to connect."
+        echo "=========================================================="
+        echo ""
+        exec zsh -l
+        """
+
+        do {
+            try scriptContent.write(to: scriptURL, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
+
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+
+            workspace.open([scriptURL], withApplicationAt: ghosttyAppURL, configuration: config) { _, error in
+                if let error {
+                    log("Failed to open test .command script in Ghostty: \(error)")
+                } else {
+                    log("Successfully launched test .command script in Ghostty")
+                }
+            }
+        } catch {
+            log("Failed to write temporary test .command script: \(error)")
+        }
+    }
+
+    private static func launchAppleTerminalTest(settings: AppSettings) {
+        log("launchAppleTerminalTest starting")
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let opSock = "\(home)/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+        let script = """
+        tell application "Terminal"
+            do script "clear; echo '=========================================================='; echo '  Drifter Terminal & SSH Dispatch Test'; echo '=========================================================='; echo '✓ Preferred Terminal : Apple Terminal'; if [ -S \\\"\(opSock)\\\" ]; then echo '✓ 1Password SSH Agent: Connected'; fi; echo '✓ OpenSSH Client     : '`ssh -V 2>&1`; echo '----------------------------------------------------------'; echo 'Terminal dispatch is configured and operational!'; echo 'Click \\'SSH\\' on any active host card in Drifter to connect.'; echo '=========================================================='; echo ''"
+            activate
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    private static func launchITermTest(settings: AppSettings) {
+        log("launchITermTest starting")
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let opSock = "\(home)/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+        let script = """
+        tell application "iTerm"
+            create window with default profile command "zsh -c \\\"clear; echo '=========================================================='; echo '  Drifter Terminal & SSH Dispatch Test'; echo '=========================================================='; echo '✓ Preferred Terminal : iTerm2'; if [ -S \\\\\\\"\(opSock)\\\\\\\" ]; then echo '✓ 1Password SSH Agent: Connected'; fi; echo '✓ OpenSSH Client     : '`ssh -V 2>&1`; echo '----------------------------------------------------------'; echo 'Terminal dispatch is configured and operational!'; echo 'Click \\\\\\'SSH\\\\\\' on any active host card in Drifter to connect.'; echo '=========================================================='; echo ''; exec zsh -l\\\""
+            activate
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    private static func launchCustomTest(settings: AppSettings) {
+        log("launchCustomTest starting with template: \(settings.customTerminalCommand)")
+        let dummyTarget = "test-host"
+        launchCustom(commandTemplate: settings.customTerminalCommand, sshTarget: dummyTarget)
     }
 
     private static func launchAppleTerminal(sshTarget: String) {

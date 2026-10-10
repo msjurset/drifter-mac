@@ -80,7 +80,7 @@ struct SettingsView: View {
                         HStack {
                             Button("Test Launch Terminal") {
                                 saveCurrentSettings()
-                                TerminalLauncher.launchSSH(ip: "127.0.0.1", store: store)
+                                TerminalLauncher.launchTest(store: store)
                             }
                             .buttonStyle(.bordered)
                             .focusable(false)
