@@ -9,16 +9,24 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
         super.init()
     }
 
-    /// Performs a swift scan of local ARP table and probes common ports
+    /// Performs a swift scan of local ARP table after warming the subnet and probes common ports
     public func scanLocalSubnet() async -> [HostItem] {
         var discoveredHosts: [HostItem] = []
-        
+
+        // 1. Warm the kernel ARP cache across the active IPv4 subnet
+        if let subnetBase = SubnetSweeper.detectLocalSubnetBase() {
+            await SubnetSweeper.warmSubnet(subnetBase: subnetBase)
+        }
+
+        // 2. Ensure Bonjour service discovery is active
+        BonjourScanner.shared.startBrowsing()
+
         let arpResults = parseARPTable()
-        
+
         for (ip, mac) in arpResults {
             var openPorts: [Int] = []
             let portsToProbe = [22, 80, 443, 8123, 53, 5000, 8080]
-            
+
             for port in portsToProbe {
                 if await checkPort(ip: ip, port: port, timeout: 0.30) {
                     openPorts.append(port)
@@ -26,13 +34,20 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
             }
 
             let hostname = resolveHostname(ip: ip)
-            let vendor = lookupVendorOUI(mac: mac)
+            let vendor = VendorLookup.lookup(mac: mac)
+            var mdns = BonjourScanner.shared.services(forHost: hostname, ip: ip)
+            if mdns.isEmpty {
+                if openPorts.contains(8123) { mdns.append("_home-assistant._tcp") }
+                if openPorts.contains(80) || openPorts.contains(443) { mdns.append("_http._tcp") }
+                if openPorts.contains(22) { mdns.append("_ssh._tcp") }
+            }
+
             var category = "unknown"
-            if openPorts.contains(8123) {
+            if openPorts.contains(8123) || mdns.contains("_home-assistant._tcp") || mdns.contains("_esphomelib._tcp") || mdns.contains("_matter._tcp") || vendor.contains("Espressif") || vendor.contains("Tuya") || vendor.contains("Philips") || vendor.contains("Sonos") {
                 category = "iot"
-            } else if openPorts.contains(5000) || openPorts.contains(8080) {
+            } else if openPorts.contains(5000) || openPorts.contains(8080) || mdns.contains("_smb._tcp") || vendor.contains("Synology") || vendor.contains("Supermicro") {
                 category = "server"
-            } else if openPorts.contains(53) {
+            } else if openPorts.contains(53) || vendor.contains("Ubiquiti") || vendor.contains("UniFi") || vendor.contains("MikroTik") || vendor.contains("Netgear") || vendor.contains("TP-Link") {
                 category = "network"
             } else if !mac.isEmpty {
                 category = "workstation"
@@ -46,7 +61,7 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
                 status: "online",
                 lastSeen: Date(),
                 openPorts: openPorts,
-                mdnsServices: openPorts.contains(8123) ? ["_home-assistant._tcp", "_http._tcp"] : (openPorts.contains(80) ? ["_http._tcp"] : []),
+                mdnsServices: mdns,
                 category: category
             )
             discoveredHosts.append(host)
@@ -137,21 +152,5 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
             return resolved != ip ? resolved : ip
         }
         return ip
-    }
-
-    private func lookupVendorOUI(mac: String) -> String {
-        let prefix = mac.replacingOccurrences(of: ":", with: "").replacingOccurrences(of: "-", with: "").prefix(6).uppercased()
-        switch prefix {
-        case "A483E7", "DCA632", "B827EB", "E45F01":
-            return "Raspberry Pi Trading"
-        case "A45E60", "B0A737", "001122", "A4B805":
-            return "Apple Inc."
-        case "001132", "00089B", "909C4A":
-            return "Synology Inc."
-        case "0024A5", "0418D6", "788A20", "AA8877":
-            return "UniFi / Ubiquiti"
-        default:
-            return "Local Network Device"
-        }
     }
 }
