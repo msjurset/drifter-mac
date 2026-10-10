@@ -70,6 +70,29 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
         return discoveredHosts
     }
 
+    /// Probes 23 common homelab, infrastructure, and database ports concurrently on a single host
+    public func deepScanHost(ip: String) async -> [Int] {
+        let deepPorts = [
+            21, 22, 23, 53, 80, 443, 445, 1883, 3000, 5000, 5001, 5432,
+            6379, 8006, 8080, 8081, 8096, 8123, 8443, 9000, 9090, 9443, 32400
+        ]
+        var open: [Int] = []
+        await withTaskGroup(of: (Int, Bool).self) { group in
+            for port in deepPorts {
+                group.addTask { [self] in
+                    let isOpen = await checkPort(ip: ip, port: port, timeout: 0.35)
+                    return (port, isOpen)
+                }
+            }
+            for await (port, isOpen) in group {
+                if isOpen {
+                    open.append(port)
+                }
+            }
+        }
+        return open.sorted()
+    }
+
     private func parseARPTable() -> [(ip: String, mac: String)] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/arp")

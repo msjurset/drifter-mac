@@ -10,6 +10,8 @@ struct HostDetailView: View {
     @ObservedObject var store: DrifterStore
     @State private var selectedPortForExplainer: Int?
     @State private var headerWidth: CGFloat = 0
+    @State private var isDeepScanning = false
+    @State private var toastMessage: String? = nil
 
     private var actionItems: [ActionPillItem] {
         var list: [ActionPillItem] = [
@@ -38,6 +40,59 @@ struct HostDetailView: View {
                         if let url = URL(string: "\(scheme)://\(host.ip)\(portStr)") {
                             NSWorkspace.shared.open(url)
                         }
+                    }
+                )
+            )
+        }
+
+        if !host.mac.isEmpty {
+            list.append(
+                ActionPillItem(
+                    id: "wol",
+                    title: "Wake",
+                    icon: "bolt.fill",
+                    help: "Send Wake-on-LAN magic packet to \(host.mac)",
+                    action: {
+                        do {
+                            try WoLLauncher.wake(mac: host.mac)
+                            toastMessage = "Wake-on-LAN magic packet sent to \(host.mac)"
+                        } catch {
+                            toastMessage = "WoL failed: \(error.localizedDescription)"
+                        }
+                    }
+                )
+            )
+        }
+
+        list.append(
+            ActionPillItem(
+                id: "deep_scan",
+                title: isDeepScanning ? "Scanning..." : "Deep Scan",
+                icon: "waveform.badge.magnifyingglass",
+                help: "Perform an on-demand probe of 23 common homelab and infrastructure ports",
+                action: {
+                    Task {
+                        isDeepScanning = true
+                        let found = await NetworkScanner.shared.deepScanHost(ip: host.ip)
+                        var updated = host
+                        updated.openPorts = Array(Set(host.openPorts + found)).sorted()
+                        store.updateHost(updated)
+                        isDeepScanning = false
+                        toastMessage = "Deep scan complete: \(updated.openPorts.count) open port(s) active"
+                    }
+                }
+            )
+        )
+
+        if !host.isApprovedHost {
+            list.append(
+                ActionPillItem(
+                    id: "approve",
+                    title: "Approve Host",
+                    icon: "checkmark.shield.fill",
+                    help: "Approve this host and lock its current ports into baseline",
+                    action: {
+                        store.toggleHostApproval(id: host.id)
                     }
                 )
             )
@@ -125,6 +180,28 @@ struct HostDetailView: View {
                     }
                 )
 
+                if let msg = toastMessage {
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundStyle(.blue)
+                        Text(msg)
+                            .font(.subheadline)
+                        Spacer()
+                        Button {
+                            toastMessage = nil
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.blue.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Device Profile")
                         .font(.headline)
@@ -142,6 +219,33 @@ struct HostDetailView: View {
                             Text(host.category.capitalized)
                         }
                         GridRow {
+                            Text("Baseline Status:")
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 8) {
+                                Text(host.isApprovedHost ? "Approved Host" : "Unapproved / Rogue")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(host.isApprovedHost ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
+                                    .foregroundStyle(host.isApprovedHost ? .green : .red)
+                                    .clipShape(Capsule())
+
+                                Button(host.isApprovedHost ? "Revoke Approval" : "Approve") {
+                                    store.toggleHostApproval(id: host.id)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
+                                .focusable(false)
+                            }
+                        }
+                        GridRow {
+                            Text("Baseline Ports:")
+                                .foregroundStyle(.secondary)
+                            Text(host.baselinePorts == nil ? "Not Locked" : (host.baselinePorts!.isEmpty ? "None" : host.baselinePorts!.map(String.init).joined(separator: ", ")))
+                                .font(.system(.body, design: .monospaced))
+                        }
+                        GridRow {
                             Text("Last Seen:")
                                 .foregroundStyle(.secondary)
                             Text(host.lastSeen.formatted(date: .numeric, time: .standard))
@@ -152,6 +256,69 @@ struct HostDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                let detectedServices = HomelabService.detectServices(openPorts: host.openPorts)
+                if !detectedServices.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Homelab Services", systemImage: "server.rack")
+                            .font(.headline)
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 180))], spacing: 10) {
+                            ForEach(detectedServices) { s in
+                                if let url = s.url(for: host.ip) {
+                                    Button {
+                                        NSWorkspace.shared.open(url)
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: s.icon)
+                                                .font(.title3)
+                                                .foregroundStyle(.purple)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(s.name)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                                Text("Port \(s.port)")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "arrow.up.right.square")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding(10)
+                                        .background(Color(NSColor.controlBackgroundColor))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .focusable(false)
+                                } else {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: s.icon)
+                                            .font(.title3)
+                                            .foregroundStyle(.blue)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(s.name)
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                            Text("Port \(s.port)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(10)
+                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Open Ports")
