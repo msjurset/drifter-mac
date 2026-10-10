@@ -69,7 +69,7 @@ public final class AIAdvisorService: Sendable {
             systemPrompt: systemPrompt,
             userPrompt: userPrompt,
             settings: effectiveSettings,
-            maxTokens: 50
+            maxTokens: 100
         )
 
         if responseText.contains("ok") || responseText.contains("connected") || responseText.contains("status") {
@@ -133,7 +133,7 @@ public final class AIAdvisorService: Sendable {
             systemPrompt: systemPrompt,
             userPrompt: jsonInput,
             settings: effectiveSettings,
-            maxTokens: 350
+            maxTokens: 1024
         )
 
         return parseAnalysisResponse(
@@ -179,7 +179,7 @@ public final class AIAdvisorService: Sendable {
             systemPrompt: systemPrompt,
             userPrompt: jsonInput,
             settings: effectiveSettings,
-            maxTokens: 350
+            maxTokens: 1024
         )
 
         return parseAnalysisResponse(
@@ -274,6 +274,17 @@ public final class AIAdvisorService: Sendable {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let combined = "\(systemPrompt)\n\nInput Data:\n\(userPrompt)"
+        var genConfig: [String: Any] = [
+            "responseMimeType": "application/json",
+            "temperature": 0.2,
+            "maxOutputTokens": max(maxTokens, 1024)
+        ]
+        // Disable thinking budget on Gemini 2.5+ / Flash / Pro models to prevent thinking tokens
+        // from exhausting the output budget and causing truncated JSON responses.
+        if model.contains("2.5") || model.contains("3.") || model.contains("flash") || model.contains("pro") {
+            genConfig["thinkingConfig"] = ["thinkingBudget": 0]
+        }
+
         let body: [String: Any] = [
             "contents": [
                 [
@@ -281,11 +292,7 @@ public final class AIAdvisorService: Sendable {
                     "parts": [["text": combined]]
                 ]
             ],
-            "generationConfig": [
-                "responseMimeType": "application/json",
-                "temperature": 0.2,
-                "maxOutputTokens": maxTokens
-            ]
+            "generationConfig": genConfig
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -420,25 +427,62 @@ public final class AIAdvisorService: Sendable {
             let recommendations: [String]?
         }
 
-        if let data = sanitized.data(using: .utf8),
-           let dto = try? JSONDecoder().decode(ParsedDTO.self, from: data) {
-            let classification = dto.classification?.trimmingCharacters(in: .whitespaces) ?? "Expected"
-            let summary = dto.summary?.trimmingCharacters(in: .whitespaces) ?? "Analysis completed."
-            let recommendations = dto.recommendations?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
+        if let data = sanitized.data(using: .utf8) {
+            if let dto = try? JSONDecoder().decode(ParsedDTO.self, from: data),
+               (dto.classification != nil || dto.summary != nil || dto.recommendations != nil) {
+                let classification = dto.classification?.trimmingCharacters(in: .whitespaces) ?? "Expected"
+                let summary = dto.summary?.trimmingCharacters(in: .whitespaces) ?? "Analysis completed."
+                let recommendations = dto.recommendations?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
 
-            return AIAnalysisResult(
-                classification: classification.isEmpty ? "Expected" : classification,
-                summary: summary.isEmpty ? "Analysis completed." : summary,
-                recommendations: recommendations.isEmpty ? ["Continue routine subnet monitoring."] : recommendations,
-                providerName: providerName,
-                modelName: modelName
-            )
+                return AIAnalysisResult(
+                    classification: classification.isEmpty ? "Expected" : classification,
+                    summary: summary.isEmpty ? "Analysis completed." : summary,
+                    recommendations: recommendations.isEmpty ? ["Continue routine subnet monitoring."] : recommendations,
+                    providerName: providerName,
+                    modelName: modelName
+                )
+            }
+
+            if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let rawClass = (dict["classification"] as? String)
+                    ?? (dict["status"] as? String)
+                    ?? (dict["category"] as? String)
+                    ?? "Expected"
+                let rawSummary = (dict["summary"] as? String)
+                    ?? (dict["explanation"] as? String)
+                    ?? (dict["description"] as? String)
+                    ?? (dict["analysis"] as? String)
+                    ?? "Analysis completed."
+                let rawRecs = (dict["recommendations"] as? [String])
+                    ?? (dict["actions"] as? [String])
+                    ?? (dict["steps"] as? [String])
+                    ?? []
+
+                let classification = rawClass.trimmingCharacters(in: .whitespaces)
+                let summary = rawSummary.trimmingCharacters(in: .whitespaces)
+                let recommendations = rawRecs.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+
+                return AIAnalysisResult(
+                    classification: classification.isEmpty ? "Expected" : classification,
+                    summary: summary.isEmpty ? "Analysis completed." : summary,
+                    recommendations: recommendations.isEmpty ? ["Continue routine subnet monitoring."] : recommendations,
+                    providerName: providerName,
+                    modelName: modelName
+                )
+            }
         }
 
-        // Graceful fallback if model output was freeform text
+        // Graceful fallback if model output was freeform text or truncated/malformed JSON
+        let fallbackSummary: String
+        if sanitized.isEmpty || sanitized.hasPrefix("{") || sanitized.hasPrefix("[") || sanitized.count < 5 {
+            fallbackSummary = "Analysis completed. Review detected network changes below."
+        } else {
+            fallbackSummary = sanitized
+        }
+
         return AIAnalysisResult(
             classification: "Expected",
-            summary: sanitized.isEmpty ? "Analysis completed." : sanitized,
+            summary: fallbackSummary,
             recommendations: ["Review host open ports against network baseline."],
             providerName: providerName,
             modelName: modelName

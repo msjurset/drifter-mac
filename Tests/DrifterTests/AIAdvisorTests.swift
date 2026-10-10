@@ -124,4 +124,39 @@ final class AIAdvisorTests: XCTestCase {
         let resolvedQuoted = try await AIKeyResolver.resolve(quotedPlain)
         XCTAssertEqual(resolvedQuoted, "sk-quoted-key")
     }
+
+    func testResponseParsingTruncatedJSONFallback() {
+        let service = AIAdvisorService()
+
+        // Test single opening brace (the exact truncation symptom)
+        let singleBrace = "{\n"
+        let res1 = service.parseAnalysisResponse(text: singleBrace, providerName: "Google Gemini", modelName: "gemini-2.5-flash")
+        XCTAssertEqual(res1.classification, "Expected")
+        XCTAssertEqual(res1.summary, "Analysis completed. Review detected network changes below.")
+        XCTAssertFalse(res1.summary.contains("{"))
+
+        // Test incomplete JSON cut off midway
+        let cutOff = "{\"classification\": \"Routine\", \"summary\": \"Incom"
+        let res2 = service.parseAnalysisResponse(text: cutOff, providerName: "Google Gemini", modelName: "gemini-2.5-flash")
+        XCTAssertEqual(res2.classification, "Expected")
+        XCTAssertEqual(res2.summary, "Analysis completed. Review detected network changes below.")
+        XCTAssertFalse(res2.summary.contains("{"))
+    }
+
+    func testResponseParsingDynamicKeys() {
+        let service = AIAdvisorService()
+        let sample = """
+        {
+          "status": "Suspicious",
+          "explanation": "Multiple unexpected open ports detected on IoT device.",
+          "actions": ["Isolate device on VLAN", "Review firewall logs"]
+        }
+        """
+
+        let result = service.parseAnalysisResponse(text: sample, providerName: "Ollama (Local)", modelName: "llama3.2")
+        XCTAssertEqual(result.classification, "Suspicious")
+        XCTAssertEqual(result.summary, "Multiple unexpected open ports detected on IoT device.")
+        XCTAssertEqual(result.recommendations.count, 2)
+        XCTAssertEqual(result.recommendations.first, "Isolate device on VLAN")
+    }
 }
