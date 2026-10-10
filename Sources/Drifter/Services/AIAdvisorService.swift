@@ -133,7 +133,7 @@ public final class AIAdvisorService: Sendable {
             systemPrompt: systemPrompt,
             userPrompt: jsonInput,
             settings: effectiveSettings,
-            maxTokens: 1024
+            maxTokens: 2048
         )
 
         return parseAnalysisResponse(
@@ -179,7 +179,7 @@ public final class AIAdvisorService: Sendable {
             systemPrompt: systemPrompt,
             userPrompt: jsonInput,
             settings: effectiveSettings,
-            maxTokens: 1024
+            maxTokens: 2048
         )
 
         return parseAnalysisResponse(
@@ -274,16 +274,11 @@ public final class AIAdvisorService: Sendable {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let combined = "\(systemPrompt)\n\nInput Data:\n\(userPrompt)"
-        var genConfig: [String: Any] = [
+        let genConfig: [String: Any] = [
             "responseMimeType": "application/json",
             "temperature": 0.2,
-            "maxOutputTokens": max(maxTokens, 1024)
+            "maxOutputTokens": max(maxTokens, 2048)
         ]
-        // Disable thinking budget on Gemini 2.5+ / Flash / Pro models to prevent thinking tokens
-        // from exhausting the output budget and causing truncated JSON responses.
-        if model.contains("2.5") || model.contains("3.") || model.contains("flash") || model.contains("pro") {
-            genConfig["thinkingConfig"] = ["thinkingBudget": 0]
-        }
 
         let body: [String: Any] = [
             "contents": [
