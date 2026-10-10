@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var aiApiKey: String = ""
     @State private var aiEndpointURL: String = "http://localhost:11434"
     @State private var aiCustomModelName: String = ""
+    @State private var aiDeepReasoning: Bool = false
     @State private var isTestingConnection: Bool = false
     @State private var testConnectionStatus: String? = nil
     @State private var isConnectionSuccess: Bool = false
@@ -356,6 +357,19 @@ struct SettingsView: View {
                                 }
                             }
 
+                            Divider()
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Toggle("Deep Security Reasoning", isOn: $aiDeepReasoning)
+                                    .onChange(of: aiDeepReasoning) { _, _ in
+                                        saveCurrentSettings()
+                                    }
+
+                                Text("Enables multi-step chain-of-thought threat modeling across drift events and network topology. Disabling prioritizes instant sub-second triage.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+
                             HStack(spacing: 12) {
                                 Button {
                                     testAIConnection()
@@ -418,6 +432,7 @@ struct SettingsView: View {
             aiApiKey = AIKeyResolver.clean(store.settings.aiSettings.apiKey)
             aiEndpointURL = store.settings.aiSettings.endpointURL
             aiCustomModelName = store.settings.aiSettings.customModelName
+            aiDeepReasoning = store.settings.aiSettings.deepReasoning
         }
     }
 
@@ -437,7 +452,8 @@ struct SettingsView: View {
             provider: aiProvider,
             apiKey: cleanedKey,
             endpointURL: aiEndpointURL,
-            customModelName: aiCustomModelName
+            customModelName: aiCustomModelName,
+            deepReasoning: aiDeepReasoning
         )
         store.updateSettings(updated)
         Task {
@@ -463,7 +479,8 @@ struct SettingsView: View {
             provider: aiProvider,
             apiKey: AIKeyResolver.clean(aiApiKey),
             endpointURL: aiEndpointURL,
-            customModelName: aiCustomModelName
+            customModelName: aiCustomModelName,
+            deepReasoning: aiDeepReasoning
         )
         Task {
             do {

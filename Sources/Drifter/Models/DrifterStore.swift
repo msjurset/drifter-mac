@@ -39,21 +39,24 @@ public struct AISettings: Codable, Equatable, Sendable {
     public var apiKey: String
     public var endpointURL: String
     public var customModelName: String
+    public var deepReasoning: Bool
 
     enum CodingKeys: String, CodingKey {
-        case enabled, provider, apiKey, endpointURL, customModelName
+        case enabled, provider, apiKey, endpointURL, customModelName, deepReasoning
     }
 
     public init(enabled: Bool = false,
                 provider: AIProvider = .ollama,
                 apiKey: String = "",
                 endpointURL: String = "http://localhost:11434",
-                customModelName: String = "") {
+                customModelName: String = "",
+                deepReasoning: Bool = false) {
         self.enabled = enabled
         self.provider = provider
         self.apiKey = apiKey
         self.endpointURL = endpointURL
         self.customModelName = customModelName
+        self.deepReasoning = deepReasoning
     }
 
     public init(from decoder: Decoder) throws {
@@ -63,6 +66,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
         endpointURL = try container.decodeIfPresent(String.self, forKey: .endpointURL) ?? "http://localhost:11434"
         customModelName = try container.decodeIfPresent(String.self, forKey: .customModelName) ?? ""
+        deepReasoning = try container.decodeIfPresent(Bool.self, forKey: .deepReasoning) ?? false
     }
 
     public var activeModel: String {

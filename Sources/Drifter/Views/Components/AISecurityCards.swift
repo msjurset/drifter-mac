@@ -3,24 +3,39 @@ import SwiftUI
 struct AISecurityBriefCard: View {
     let brief: AIAnalysisResult
     var title: String = "AI Security Brief"
+    var onDeepInvestigate: (() -> Void)? = nil
     let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 8) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.purple)
+                Image(systemName: brief.isDeepReasoning ? "brain.head.profile" : "sparkles")
+                    .foregroundStyle(brief.isDeepReasoning ? .indigo : .purple)
 
-                Text(title)
+                Text(brief.isDeepReasoning ? "Deep Security Investigation" : title)
                     .font(.headline)
 
                 classificationBadge(brief.classification)
+
+                reasoningBadge
 
                 Text("\(brief.providerName) • \(brief.modelName)")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
 
                 Spacer()
+
+                if !brief.isDeepReasoning, let onDeepInvestigate {
+                    Button {
+                        onDeepInvestigate()
+                    } label: {
+                        Label("Deep Investigation", systemImage: "brain.head.profile")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .focusable(false)
+                    .help("Escalate to multi-step threat model with extended reasoning")
+                }
 
                 Text(brief.timestamp.formatted(date: .omitted, time: .standard))
                     .font(.caption2)
@@ -71,6 +86,24 @@ struct AISecurityBriefCard: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private var reasoningBadge: some View {
+        if brief.isDeepReasoning {
+            HStack(spacing: 4) {
+                Image(systemName: "brain.head.profile")
+                    .font(.caption2)
+                Text("Deep Reasoning")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.indigo.opacity(0.15))
+            .foregroundStyle(.indigo)
+            .clipShape(Capsule())
+        }
     }
 
     @ViewBuilder

@@ -22,15 +22,18 @@ final class AIAdvisorTests: XCTestCase {
         XCTAssertEqual(defaultSettings.provider, .ollama)
         XCTAssertEqual(defaultSettings.endpointURL, "http://localhost:11434")
         XCTAssertEqual(defaultSettings.activeModel, "llama3.2")
+        XCTAssertFalse(defaultSettings.deepReasoning)
 
         let customSettings = AISettings(
             enabled: true,
             provider: .gemini,
             apiKey: "test-gemini-key",
-            customModelName: "gemini-2.5-flash-lite"
+            customModelName: "gemini-2.5-flash-lite",
+            deepReasoning: true
         )
         XCTAssertTrue(customSettings.enabled)
         XCTAssertEqual(customSettings.activeModel, "gemini-2.5-flash-lite")
+        XCTAssertTrue(customSettings.deepReasoning)
 
         // Test JSON round-trip
         let encoder = JSONEncoder()
@@ -45,6 +48,18 @@ final class AIAdvisorTests: XCTestCase {
         XCTAssertEqual(decoded.provider, customSettings.provider)
         XCTAssertEqual(decoded.apiKey, customSettings.apiKey)
         XCTAssertEqual(decoded.activeModel, customSettings.activeModel)
+        XCTAssertEqual(decoded.deepReasoning, customSettings.deepReasoning)
+
+        // Test backward compatibility: JSON missing deepReasoning field
+        let legacyJSON = """
+        {"enabled":true,"provider":"Google Gemini","apiKey":"test","endpointURL":"http://localhost:11434","customModelName":""}
+        """
+        guard let legacyData = legacyJSON.data(using: .utf8),
+              let legacyDecoded = try? decoder.decode(AISettings.self, from: legacyData) else {
+            XCTFail("Failed to decode legacy AISettings JSON without deepReasoning")
+            return
+        }
+        XCTAssertFalse(legacyDecoded.deepReasoning)
     }
 
     func testResponseParsingPureJSON() {
@@ -158,5 +173,38 @@ final class AIAdvisorTests: XCTestCase {
         XCTAssertEqual(result.summary, "Multiple unexpected open ports detected on IoT device.")
         XCTAssertEqual(result.recommendations.count, 2)
         XCTAssertEqual(result.recommendations.first, "Isolate device on VLAN")
+    }
+
+    func testAIAnalysisResultDeepReasoningPersistence() {
+        let result = AIAnalysisResult(
+            classification: "Suspicious",
+            summary: "Potential ARP spoofing between host and gateway.",
+            recommendations: ["Check ARP table", "Verify gateway MAC"],
+            providerName: "Google Gemini",
+            modelName: "gemini-2.5-flash",
+            isDeepReasoning: true
+        )
+        XCTAssertTrue(result.isDeepReasoning)
+
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+        guard let data = try? encoder.encode(result),
+              let decoded = try? decoder.decode(AIAnalysisResult.self, from: data) else {
+            XCTFail("Failed to encode/decode AIAnalysisResult with isDeepReasoning")
+            return
+        }
+        XCTAssertTrue(decoded.isDeepReasoning)
+        XCTAssertEqual(decoded.classification, result.classification)
+
+        // Backward compatibility: JSON missing isDeepReasoning field
+        let legacyJSON = """
+        {"id":"test-id","classification":"Routine","summary":"Normal host.","recommendations":[],"timestamp":1700000000,"providerName":"Ollama","modelName":"llama3.2"}
+        """
+        guard let legacyData = legacyJSON.data(using: .utf8),
+              let legacyDecoded = try? decoder.decode(AIAnalysisResult.self, from: legacyData) else {
+            XCTFail("Failed to decode legacy AIAnalysisResult JSON without isDeepReasoning")
+            return
+        }
+        XCTAssertFalse(legacyDecoded.isDeepReasoning)
     }
 }

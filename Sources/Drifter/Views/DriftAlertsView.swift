@@ -3,6 +3,7 @@ import SwiftUI
 struct DriftAlertsView: View {
     @ObservedObject var store: DrifterStore
     @State private var isAnalyzingDrift: Bool = false
+    @State private var isDeepInvestigationRunning: Bool = false
     @State private var aiBrief: AIAnalysisResult? = nil
     @State private var aiError: String? = nil
 
@@ -47,20 +48,34 @@ struct DriftAlertsView: View {
 
                 HStack(spacing: 8) {
                     if store.settings.aiSettings.enabled {
-                        Button {
-                            performAITriage()
+                        Menu {
+                            Button {
+                                performAITriage(deepOverride: false)
+                            } label: {
+                                Label("Fast Triage (~1s)", systemImage: "bolt.fill")
+                            }
+
+                            Button {
+                                performAITriage(deepOverride: true)
+                            } label: {
+                                Label("Deep Security Investigation", systemImage: "brain.head.profile")
+                            }
                         } label: {
                             if isAnalyzingDrift {
                                 ProgressView()
                                     .controlSize(.small)
                                     .padding(.trailing, 2)
-                                Text("Triaging...")
+                                Text(isDeepInvestigationRunning ? "Investigating..." : "Triaging...")
                             } else {
-                                Label("AI Triage", systemImage: "sparkles")
+                                Label(store.settings.aiSettings.deepReasoning ? "AI Deep Triage" : "AI Triage",
+                                      systemImage: store.settings.aiSettings.deepReasoning ? "brain.head.profile" : "sparkles")
                             }
+                        } primaryAction: {
+                            performAITriage()
                         }
                         .buttonStyle(.bordered)
-                        .help("Synthesize active drift events with AI security triage")
+                        .menuStyle(.borderedButton)
+                        .help(store.settings.aiSettings.deepReasoning ? "Synthesize active drift events with Deep Security Reasoning (click arrow for options)" : "Synthesize active drift events with AI security triage (click arrow for options)")
                         .focusable(false)
                         .disabled(isAnalyzingDrift || store.driftEvents.isEmpty)
                     }
@@ -123,7 +138,13 @@ struct DriftAlertsView: View {
             Divider()
 
             if let brief = aiBrief {
-                AISecurityBriefCard(brief: brief, title: "Drift Incident Triage") {
+                AISecurityBriefCard(
+                    brief: brief,
+                    title: brief.isDeepReasoning ? "Deep Security Investigation" : "Drift Incident Triage",
+                    onDeepInvestigate: {
+                        performAITriage(deepOverride: true)
+                    }
+                ) {
                     withAnimation {
                         aiBrief = nil
                     }
@@ -163,20 +184,24 @@ struct DriftAlertsView: View {
         }
     }
 
-    private func performAITriage() {
+    private func performAITriage(deepOverride: Bool? = nil) {
+        let isDeep = deepOverride ?? store.settings.aiSettings.deepReasoning
         isAnalyzingDrift = true
+        isDeepInvestigationRunning = isDeep
         aiError = nil
         Task {
             do {
                 let result = try await AIAdvisorService.shared.triageDriftAlerts(
                     events: store.driftEvents,
                     hosts: store.hosts,
-                    settings: store.settings.aiSettings
+                    settings: store.settings.aiSettings,
+                    forceDeepReasoning: deepOverride
                 )
                 await MainActor.run {
                     withAnimation {
                         aiBrief = result
                         isAnalyzingDrift = false
+                        isDeepInvestigationRunning = false
                     }
                 }
             } catch {
@@ -184,6 +209,7 @@ struct DriftAlertsView: View {
                     withAnimation {
                         aiError = error.localizedDescription
                         isAnalyzingDrift = false
+                        isDeepInvestigationRunning = false
                     }
                 }
             }

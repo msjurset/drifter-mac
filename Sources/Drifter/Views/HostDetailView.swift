@@ -13,6 +13,7 @@ struct HostDetailView: View {
     @State private var isDeepScanning = false
     @State private var toastMessage: String? = nil
     @State private var isAIAuditing = false
+    @State private var isDeepInvestigationRunning = false
     @State private var aiAuditResult: AIAnalysisResult? = nil
     @State private var aiAuditError: String? = nil
 
@@ -88,12 +89,13 @@ struct HostDetailView: View {
         )
 
         if store.settings.aiSettings.enabled {
+            let isDeep = store.settings.aiSettings.deepReasoning
             list.append(
                 ActionPillItem(
                     id: "ai_audit",
-                    title: isAIAuditing ? "Auditing..." : "AI Audit",
-                    icon: "sparkles",
-                    help: "Run AI security posture evaluation for this host",
+                    title: isAIAuditing ? (isDeepInvestigationRunning ? "Investigating..." : "Auditing...") : (isDeep ? "AI Deep Audit" : "AI Audit"),
+                    icon: isDeep ? "brain.head.profile" : "sparkles",
+                    help: isDeep ? "Run deep multi-step security posture evaluation for this host" : "Run AI security posture evaluation for this host",
                     action: {
                         runAIAudit()
                     }
@@ -242,7 +244,13 @@ struct HostDetailView: View {
                 }
 
                 if let brief = aiAuditResult {
-                    AISecurityBriefCard(brief: brief, title: "Host Security Audit") {
+                    AISecurityBriefCard(
+                        brief: brief,
+                        title: brief.isDeepReasoning ? "Deep Security Investigation" : "Host Security Audit",
+                        onDeepInvestigate: {
+                            runAIAudit(deepOverride: true)
+                        }
+                    ) {
                         withAnimation {
                             aiAuditResult = nil
                         }
@@ -463,20 +471,24 @@ struct HostDetailView: View {
         }
     }
 
-    private func runAIAudit() {
+    private func runAIAudit(deepOverride: Bool? = nil) {
+        let isDeep = deepOverride ?? store.settings.aiSettings.deepReasoning
         isAIAuditing = true
+        isDeepInvestigationRunning = isDeep
         aiAuditError = nil
         Task {
             do {
                 let result = try await AIAdvisorService.shared.analyzeHostSecurity(
                     host: host,
                     events: store.driftEvents,
-                    settings: store.settings.aiSettings
+                    settings: store.settings.aiSettings,
+                    forceDeepReasoning: deepOverride
                 )
                 await MainActor.run {
                     withAnimation {
                         aiAuditResult = result
                         isAIAuditing = false
+                        isDeepInvestigationRunning = false
                     }
                 }
             } catch {
@@ -484,6 +496,7 @@ struct HostDetailView: View {
                     withAnimation {
                         aiAuditError = error.localizedDescription
                         isAIAuditing = false
+                        isDeepInvestigationRunning = false
                     }
                 }
             }

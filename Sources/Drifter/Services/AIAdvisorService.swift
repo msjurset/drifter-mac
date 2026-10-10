@@ -31,6 +31,11 @@ public struct AIAnalysisResult: Codable, Equatable, Sendable, Identifiable {
     public var timestamp: Date
     public var providerName: String
     public var modelName: String
+    public var isDeepReasoning: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, classification, summary, recommendations, timestamp, providerName, modelName, isDeepReasoning
+    }
 
     public init(id: String = UUID().uuidString,
                 classification: String,
@@ -38,7 +43,8 @@ public struct AIAnalysisResult: Codable, Equatable, Sendable, Identifiable {
                 recommendations: [String],
                 timestamp: Date = Date(),
                 providerName: String,
-                modelName: String) {
+                modelName: String,
+                isDeepReasoning: Bool = false) {
         self.id = id
         self.classification = classification
         self.summary = summary
@@ -46,6 +52,19 @@ public struct AIAnalysisResult: Codable, Equatable, Sendable, Identifiable {
         self.timestamp = timestamp
         self.providerName = providerName
         self.modelName = modelName
+        self.isDeepReasoning = isDeepReasoning
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        classification = try container.decodeIfPresent(String.self, forKey: .classification) ?? "Expected"
+        summary = try container.decodeIfPresent(String.self, forKey: .summary) ?? ""
+        recommendations = try container.decodeIfPresent([String].self, forKey: .recommendations) ?? []
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+        providerName = try container.decodeIfPresent(String.self, forKey: .providerName) ?? ""
+        modelName = try container.decodeIfPresent(String.self, forKey: .modelName) ?? ""
+        isDeepReasoning = try container.decodeIfPresent(Bool.self, forKey: .isDeepReasoning) ?? false
     }
 }
 
@@ -79,11 +98,12 @@ public final class AIAdvisorService: Sendable {
     }
 
     /// Synthesizes active drift alerts into a high-level security triage
-    public func triageDriftAlerts(events: [DriftEvent], hosts: [HostItem], settings: AISettings) async throws -> AIAnalysisResult {
+    public func triageDriftAlerts(events: [DriftEvent], hosts: [HostItem], settings: AISettings, forceDeepReasoning: Bool? = nil) async throws -> AIAnalysisResult {
         guard settings.enabled else {
             throw AIAdvisorError.disabled
         }
 
+        let isDeep = forceDeepReasoning ?? settings.deepReasoning
         let unackEvents = events.filter { !$0.acknowledged }
         guard !unackEvents.isEmpty else {
             return AIAnalysisResult(
@@ -91,7 +111,8 @@ public final class AIAdvisorService: Sendable {
                 summary: "Network baseline is clean. No unacknowledged drift alerts require investigation.",
                 recommendations: ["Maintain periodic background scanning cadence."],
                 providerName: settings.provider.rawValue,
-                modelName: settings.activeModel
+                modelName: settings.activeModel,
+                isDeepReasoning: isDeep
             )
         }
 
@@ -99,7 +120,7 @@ public final class AIAdvisorService: Sendable {
 
         // Build compact JSON payload
         var eventItems: [[String: Any]] = []
-        for event in unackEvents.prefix(10) {
+        for event in unackEvents.prefix(15) {
             let matchedHost = hosts.first(where: { $0.id == event.hostId || $0.ip == event.hostIp })
             let item: [String: Any] = [
                 "ip": event.hostIp,
@@ -118,33 +139,53 @@ public final class AIAdvisorService: Sendable {
         ], options: [])
         let jsonInput = String(decoding: payloadData, as: UTF8.self)
 
-        let systemPrompt = """
-        You are Drifter AI Advisor, a local network security auditor for homelab and IoT subnets.
-        Analyze the provided network drift events. Determine whether the shifts reflect routine homelab activity (e.g. smart bulb pairing, reboot, standard web port) or an anomaly requiring inspection.
-        Return ONLY valid JSON in this exact structure with no markdown code blocks:
-        {
-          "classification": "Routine" | "Expected" | "Suspicious",
-          "summary": "1 to 2 concise sentences explaining the vendor context and significance of the changes.",
-          "recommendations": ["Actionable verification step or command 1", "Actionable verification step or command 2"]
+        let systemPrompt: String
+        if isDeep {
+            systemPrompt = """
+            You are Drifter AI Security Auditor conducting an in-depth threat investigation for homelab and IoT subnets.
+            Perform a thorough threat model on the provided drift events:
+            1. Cross-correlate events across hosts (e.g., concurrent DHCP leases, unexpected open ports such as SSH 22, Telnet 23, SMB 445, or high random ports).
+            2. Evaluate risks: rogue APs, ARP/DNS anomalies, lateral movement, or unhardened IoT services.
+            3. Differentiate expected homelab services (Home Assistant, ESPHome, Docker, Pi-hole) from potential compromises.
+            Return ONLY valid JSON in this exact structure with no markdown code blocks:
+            {
+              "classification": "Routine" | "Expected" | "Suspicious",
+              "summary": "2 to 3 detailed sentences explaining root cause, cross-host correlation, and security implications.",
+              "recommendations": ["High-priority mitigation or terminal command 1", "Verification step or network check 2", "Hardening action 3"]
+            }
+            """
+        } else {
+            systemPrompt = """
+            You are Drifter AI Advisor, a local network security auditor for homelab and IoT subnets.
+            Analyze the provided network drift events. Determine whether the shifts reflect routine homelab activity (e.g. smart bulb pairing, reboot, standard web port) or an anomaly requiring inspection.
+            Return ONLY valid JSON in this exact structure with no markdown code blocks:
+            {
+              "classification": "Routine" | "Expected" | "Suspicious",
+              "summary": "1 to 2 concise sentences explaining the vendor context and significance of the changes.",
+              "recommendations": ["Actionable verification step or command 1", "Actionable verification step or command 2"]
+            }
+            """
         }
-        """
 
         let responseText = try await dispatchQuery(
             systemPrompt: systemPrompt,
             userPrompt: jsonInput,
             settings: effectiveSettings,
-            maxTokens: 2048
+            maxTokens: isDeep ? 4096 : 1024,
+            deepReasoning: isDeep
         )
 
         return parseAnalysisResponse(
             text: responseText,
             providerName: settings.provider.rawValue,
-            modelName: settings.activeModel
+            modelName: settings.activeModel,
+            isDeepReasoning: isDeep
         )
     }
 
     /// Evaluates the security posture and open ports of an individual host
-    public func analyzeHostSecurity(host: HostItem, events: [DriftEvent], settings: AISettings) async throws -> AIAnalysisResult {
+    public func analyzeHostSecurity(host: HostItem, events: [DriftEvent], settings: AISettings, forceDeepReasoning: Bool? = nil) async throws -> AIAnalysisResult {
+        let isDeep = forceDeepReasoning ?? settings.deepReasoning
         let effectiveSettings = try await resolveEffectiveSettings(settings)
 
         let hostEvents = events.filter { $0.hostId == host.id || $0.hostIp == host.ip }
@@ -164,28 +205,47 @@ public final class AIAdvisorService: Sendable {
         let payloadData = try JSONSerialization.data(withJSONObject: payload, options: [])
         let jsonInput = String(decoding: payloadData, as: UTF8.self)
 
-        let systemPrompt = """
-        You are Drifter AI Advisor. Audit the security profile of this local network host.
-        Identify any unexpected ports, missing service baselines, or vulnerabilities typical for this hardware vendor.
-        Return ONLY valid JSON in this exact structure with no markdown code blocks:
-        {
-          "classification": "Routine" | "Expected" | "Suspicious",
-          "summary": "1 to 2 concise sentences assessing this host's current posture.",
-          "recommendations": ["Actionable verification step 1", "Actionable verification step 2"]
+        let systemPrompt: String
+        if isDeep {
+            systemPrompt = """
+            You are Drifter AI Security Auditor conducting an in-depth host vulnerability and posture audit.
+            Examine this host's open ports against its hardware vendor, device category, mDNS advertisements, and recent drift history:
+            1. Identify any unexpected services, unencrypted management interfaces, or known IoT vulnerability patterns typical for this vendor.
+            2. Cross-reference open ports with authoritative baseline expectations.
+            3. Recommend specific terminal inspection commands (e.g., nmap, curl headers, nc) or network isolation strategies.
+            Return ONLY valid JSON in this exact structure with no markdown code blocks:
+            {
+              "classification": "Routine" | "Expected" | "Suspicious",
+              "summary": "2 to 3 detailed sentences auditing host posture and exposure surface.",
+              "recommendations": ["Verification command or step 1", "Mitigation or hardening action 2"]
+            }
+            """
+        } else {
+            systemPrompt = """
+            You are Drifter AI Advisor. Audit the security profile of this local network host.
+            Identify any unexpected ports, missing service baselines, or vulnerabilities typical for this hardware vendor.
+            Return ONLY valid JSON in this exact structure with no markdown code blocks:
+            {
+              "classification": "Routine" | "Expected" | "Suspicious",
+              "summary": "1 to 2 concise sentences assessing this host's current posture.",
+              "recommendations": ["Actionable verification step 1", "Actionable verification step 2"]
+            }
+            """
         }
-        """
 
         let responseText = try await dispatchQuery(
             systemPrompt: systemPrompt,
             userPrompt: jsonInput,
             settings: effectiveSettings,
-            maxTokens: 2048
+            maxTokens: isDeep ? 4096 : 1024,
+            deepReasoning: isDeep
         )
 
         return parseAnalysisResponse(
             text: responseText,
             providerName: settings.provider.rawValue,
-            modelName: settings.activeModel
+            modelName: settings.activeModel,
+            isDeepReasoning: isDeep
         )
     }
 
@@ -206,12 +266,12 @@ public final class AIAdvisorService: Sendable {
 
     // MARK: - Provider Query Dispatching
 
-    private func dispatchQuery(systemPrompt: String, userPrompt: String, settings: AISettings, maxTokens: Int) async throws -> String {
+    private func dispatchQuery(systemPrompt: String, userPrompt: String, settings: AISettings, maxTokens: Int, deepReasoning: Bool = false) async throws -> String {
         switch settings.provider {
         case .ollama:
             return try await queryOllama(systemPrompt: systemPrompt, userPrompt: userPrompt, settings: settings)
         case .gemini:
-            return try await queryGemini(systemPrompt: systemPrompt, userPrompt: userPrompt, settings: settings, maxTokens: maxTokens)
+            return try await queryGemini(systemPrompt: systemPrompt, userPrompt: userPrompt, settings: settings, maxTokens: maxTokens, deepReasoning: deepReasoning)
         case .anthropic:
             return try await queryAnthropic(systemPrompt: systemPrompt, userPrompt: userPrompt, settings: settings, maxTokens: maxTokens)
         case .openai:
@@ -262,7 +322,7 @@ public final class AIAdvisorService: Sendable {
 
     // MARK: - Google Gemini Implementation
 
-    private func queryGemini(systemPrompt: String, userPrompt: String, settings: AISettings, maxTokens: Int) async throws -> String {
+    private func queryGemini(systemPrompt: String, userPrompt: String, settings: AISettings, maxTokens: Int, deepReasoning: Bool = false) async throws -> String {
         let model = settings.activeModel
         let key = settings.apiKey.trimmingCharacters(in: .whitespaces)
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(key)") else {
@@ -274,11 +334,15 @@ public final class AIAdvisorService: Sendable {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let combined = "\(systemPrompt)\n\nInput Data:\n\(userPrompt)"
-        let genConfig: [String: Any] = [
+        var genConfig: [String: Any] = [
             "responseMimeType": "application/json",
             "temperature": 0.2,
-            "maxOutputTokens": max(maxTokens, 2048)
+            "maxOutputTokens": deepReasoning ? max(maxTokens, 4096) : max(maxTokens, 1024)
         ]
+
+        if !deepReasoning && (model.contains("2.5") || model.contains("3.") || model.contains("flash") || model.contains("pro")) {
+            genConfig["thinkingConfig"] = ["thinkingBudget": 0]
+        }
 
         let body: [String: Any] = [
             "contents": [
@@ -403,7 +467,7 @@ public final class AIAdvisorService: Sendable {
 
     // MARK: - Response Parsing
 
-    public func parseAnalysisResponse(text: String, providerName: String, modelName: String) -> AIAnalysisResult {
+    public func parseAnalysisResponse(text: String, providerName: String, modelName: String, isDeepReasoning: Bool = false) -> AIAnalysisResult {
         // Strip potential markdown code fences
         var sanitized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if sanitized.hasPrefix("```json") {
@@ -434,7 +498,8 @@ public final class AIAdvisorService: Sendable {
                     summary: summary.isEmpty ? "Analysis completed." : summary,
                     recommendations: recommendations.isEmpty ? ["Continue routine subnet monitoring."] : recommendations,
                     providerName: providerName,
-                    modelName: modelName
+                    modelName: modelName,
+                    isDeepReasoning: isDeepReasoning
                 )
             }
 
@@ -462,7 +527,8 @@ public final class AIAdvisorService: Sendable {
                     summary: summary.isEmpty ? "Analysis completed." : summary,
                     recommendations: recommendations.isEmpty ? ["Continue routine subnet monitoring."] : recommendations,
                     providerName: providerName,
-                    modelName: modelName
+                    modelName: modelName,
+                    isDeepReasoning: isDeepReasoning
                 )
             }
         }
@@ -480,7 +546,8 @@ public final class AIAdvisorService: Sendable {
             summary: fallbackSummary,
             recommendations: ["Review host open ports against network baseline."],
             providerName: providerName,
-            modelName: modelName
+            modelName: modelName,
+            isDeepReasoning: isDeepReasoning
         )
     }
 }
