@@ -2,6 +2,9 @@ import SwiftUI
 
 struct DriftAlertsView: View {
     @ObservedObject var store: DrifterStore
+    @State private var isAnalyzingDrift: Bool = false
+    @State private var aiBrief: AIAnalysisResult? = nil
+    @State private var aiError: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,6 +46,25 @@ struct DriftAlertsView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
+                    if store.settings.aiSettings.enabled {
+                        Button {
+                            performAITriage()
+                        } label: {
+                            if isAnalyzingDrift {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .padding(.trailing, 2)
+                                Text("Triaging...")
+                            } else {
+                                Label("AI Triage", systemImage: "sparkles")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Synthesize active drift events with AI security triage")
+                        .focusable(false)
+                        .disabled(isAnalyzingDrift || store.driftEvents.isEmpty)
+                    }
+
                     Button {
                         store.lockBaseline()
                     } label: {
@@ -100,6 +122,24 @@ struct DriftAlertsView: View {
 
             Divider()
 
+            if let brief = aiBrief {
+                AISecurityBriefCard(brief: brief, title: "Drift Incident Triage") {
+                    withAnimation {
+                        aiBrief = nil
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 12)
+            } else if let errorMsg = aiError {
+                AIAdvisorErrorCard(errorMessage: errorMsg) {
+                    withAnimation {
+                        aiError = nil
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 12)
+            }
+
             if store.driftEvents.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "checkmark.shield.fill")
@@ -119,6 +159,33 @@ struct DriftAlertsView: View {
                     }
                 }
                 .listStyle(.plain)
+            }
+        }
+    }
+
+    private func performAITriage() {
+        isAnalyzingDrift = true
+        aiError = nil
+        Task {
+            do {
+                let result = try await AIAdvisorService.shared.triageDriftAlerts(
+                    events: store.driftEvents,
+                    hosts: store.hosts,
+                    settings: store.settings.aiSettings
+                )
+                await MainActor.run {
+                    withAnimation {
+                        aiBrief = result
+                        isAnalyzingDrift = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation {
+                        aiError = error.localizedDescription
+                        isAnalyzingDrift = false
+                    }
+                }
             }
         }
     }

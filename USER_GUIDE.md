@@ -15,8 +15,9 @@ Welcome to **Drifter**! This guide covers everything you need to know to monitor
 7. [Deep Port Probing, Wake-on-LAN & Homelab Services](#7-deep-port-probing-wake-on-lan--homelab-services)
 8. [Menu Bar Status Item & Background Watchdog](#8-menu-bar-status-item--background-watchdog)
 9. [Exporting Network Security Audit Reports](#9-exporting-network-security-audit-reports)
-10. [Settings & Customization](#10-settings--customization)
-11. [Data Storage & Privacy](#11-data-storage--privacy)
+10. [Optional AI Security Advisor](#10-optional-ai-security-advisor)
+11. [Settings & Customization](#11-settings--customization)
+12. [Data Storage & Privacy](#12-data-storage--privacy)
 
 ---
 
@@ -180,7 +181,38 @@ Generate comprehensive network baseline and compliance reports at any time by cl
 
 ---
 
-## 10. Settings & Customization
+## 10. Optional AI Security Advisor
+
+Drifter includes an **optional, purely additive AI Security Advisor**. It is disabled by default; when toggled off in Settings, all AI buttons and cards remain completely hidden so the application functions 100% offline with zero distractions.
+
+### Supported Providers
+- **Ollama (100% Local & Private)**:
+  - Connects to your local Ollama daemon (`http://localhost:11434`).
+  - Default model: `llama3.2`.
+  - Zero cloud telemetry; no network packets or host data leave your workstation.
+- **Cloud BYOK (Bring Your Own Key)**:
+  - **Google Gemini**: Default `gemini-2.5-flash`
+  - **Anthropic Claude**: Default `claude-3-5-haiku-latest`
+  - **OpenAI**: Default `gpt-4o-mini`
+  - Stored locally in macOS preferences and sent directly to the provider over HTTPS.
+
+### Capabilities & Usage
+1. **Drift Incident Triage**:
+   - In the **Drift Alerts** tab, click **✦ AI Triage**.
+   - Drifter sends a compact, sanitized summary of unacknowledged events and host metadata (< 300 tokens).
+   - Generates an instant **Security Brief** card with:
+     - **Classification Badge**: `Routine` (green), `Expected` (blue), or `Suspicious` (red).
+     - **Contextual Summary**: 1–2 sentence synthesis explaining vendor context and event implications.
+     - **Actionable Recommendations**: Clear verification commands or network triage steps.
+2. **Host Security Audit**:
+   - On any host detail card, click **✦ AI Audit** in the action bar.
+   - Evaluates open ports, baseline adherence, and hardware category for potential vulnerabilities or unneeded listening services.
+3. **Connection Verification**:
+   - In **Settings > AI Security Advisor**, click **Test Connection** to immediately verify your local Ollama instance or cloud API key.
+
+---
+
+## 11. Settings & Customization
 
 Navigate to **Settings** in the sidebar to configure:
 - **Preferred Terminal Application**: Select Ghostty, Apple Terminal, iTerm2, or a custom launch command template.
@@ -189,6 +221,7 @@ Navigate to **Settings** in the sidebar to configure:
 - **Background Watchdog Polling**: Select background scan frequency (Manual Only, 5 min, 15 min, 30 min, 1 hour).
 - **Baseline Management**: Snapshot and lock current state as the authoritative baseline.
 - **Drift Alert Notifications**: Enable or disable macOS desktop notifications.
+- **AI Security Advisor**: Enable optional local Ollama or cloud BYOK security analysis.
 
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
 
@@ -196,8 +229,10 @@ Navigate to **Settings** in the sidebar to configure:
 
 ---
 
-## 11. Data Storage & Privacy
+## 12. Data Storage & Privacy
 
-Drifter is **100% local and offline**. No telemetry or host data ever leaves your Mac.
+Drifter is **100% local and offline** by default. No telemetry or host data ever leaves your Mac.
 - **Local Store Location**: `~/Library/Application Support/DrifterMac/drifter_store.json`
 - **Forgetting Hosts**: Click the **Forget** (🗑️) button on any host card to permanently delete a host baseline from your local store.
+- **AI Privacy**: If the optional AI Advisor is enabled with Ollama, queries execute strictly against your local machine. If configured with a cloud provider, payloads contain only minimal host and port identifiers needed for the specific on-demand analysis.
+

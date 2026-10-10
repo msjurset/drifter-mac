@@ -12,6 +12,9 @@ struct HostDetailView: View {
     @State private var headerWidth: CGFloat = 0
     @State private var isDeepScanning = false
     @State private var toastMessage: String? = nil
+    @State private var isAIAuditing = false
+    @State private var aiAuditResult: AIAnalysisResult? = nil
+    @State private var aiAuditError: String? = nil
 
     private var actionItems: [ActionPillItem] {
         var list: [ActionPillItem] = [
@@ -83,6 +86,20 @@ struct HostDetailView: View {
                 }
             )
         )
+
+        if store.settings.aiSettings.enabled {
+            list.append(
+                ActionPillItem(
+                    id: "ai_audit",
+                    title: isAIAuditing ? "Auditing..." : "AI Audit",
+                    icon: "sparkles",
+                    help: "Run AI security posture evaluation for this host",
+                    action: {
+                        runAIAudit()
+                    }
+                )
+            )
+        }
 
         if !host.isApprovedHost {
             list.append(
@@ -222,6 +239,20 @@ struct HostDetailView: View {
                     .padding(.vertical, 8)
                     .background(Color.blue.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
+                if let brief = aiAuditResult {
+                    AISecurityBriefCard(brief: brief, title: "Host Security Audit") {
+                        withAnimation {
+                            aiAuditResult = nil
+                        }
+                    }
+                } else if let errorMsg = aiAuditError {
+                    AIAdvisorErrorCard(errorMessage: errorMsg) {
+                        withAnimation {
+                            aiAuditError = nil
+                        }
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -425,6 +456,37 @@ struct HostDetailView: View {
                 detail: "Port \(item.port) open on \(host.hostname.isEmpty ? host.ip : host.hostname)"
             )
             AlertExplainerPopoverView(event: tempEvent, store: store)
+        }
+        .onChange(of: host.id) { _, _ in
+            aiAuditResult = nil
+            aiAuditError = nil
+        }
+    }
+
+    private func runAIAudit() {
+        isAIAuditing = true
+        aiAuditError = nil
+        Task {
+            do {
+                let result = try await AIAdvisorService.shared.analyzeHostSecurity(
+                    host: host,
+                    events: store.driftEvents,
+                    settings: store.settings.aiSettings
+                )
+                await MainActor.run {
+                    withAnimation {
+                        aiAuditResult = result
+                        isAIAuditing = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation {
+                        aiAuditError = error.localizedDescription
+                        isAIAuditing = false
+                    }
+                }
+            }
         }
     }
 

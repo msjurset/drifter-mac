@@ -11,6 +11,66 @@ public enum TerminalApp: String, CaseIterable, Identifiable, Codable, Sendable {
     public var id: String { rawValue }
 }
 
+public enum AIProvider: String, CaseIterable, Identifiable, Codable, Sendable {
+    case ollama = "Ollama (Local)"
+    case gemini = "Google Gemini"
+    case anthropic = "Anthropic Claude"
+    case openai = "OpenAI"
+
+    public var id: String { rawValue }
+
+    public var defaultModel: String {
+        switch self {
+        case .ollama: return "llama3.2"
+        case .gemini: return "gemini-2.5-flash"
+        case .anthropic: return "claude-3-5-haiku-latest"
+        case .openai: return "gpt-4o-mini"
+        }
+    }
+
+    public var requiresAPIKey: Bool {
+        self != .ollama
+    }
+}
+
+public struct AISettings: Codable, Equatable, Sendable {
+    public var enabled: Bool
+    public var provider: AIProvider
+    public var apiKey: String
+    public var endpointURL: String
+    public var customModelName: String
+
+    enum CodingKeys: String, CodingKey {
+        case enabled, provider, apiKey, endpointURL, customModelName
+    }
+
+    public init(enabled: Bool = false,
+                provider: AIProvider = .ollama,
+                apiKey: String = "",
+                endpointURL: String = "http://localhost:11434",
+                customModelName: String = "") {
+        self.enabled = enabled
+        self.provider = provider
+        self.apiKey = apiKey
+        self.endpointURL = endpointURL
+        self.customModelName = customModelName
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        provider = try container.decodeIfPresent(AIProvider.self, forKey: .provider) ?? .ollama
+        apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
+        endpointURL = try container.decodeIfPresent(String.self, forKey: .endpointURL) ?? "http://localhost:11434"
+        customModelName = try container.decodeIfPresent(String.self, forKey: .customModelName) ?? ""
+    }
+
+    public var activeModel: String {
+        let trimmed = customModelName.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? provider.defaultModel : trimmed
+    }
+}
+
 public struct AppSettings: Codable, Equatable, Sendable {
     public var preferredTerminal: TerminalApp
     public var defaultSSHUser: String
@@ -20,9 +80,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var runbookURLTemplate: String
     public var backgroundScanIntervalMinutes: Int
     public var showMenuBarItem: Bool
+    public var aiSettings: AISettings
 
     enum CodingKeys: String, CodingKey {
-        case preferredTerminal, defaultSSHUser, customTerminalCommand, notifyOnDrift, enableRunbookIntegration, runbookURLTemplate, backgroundScanIntervalMinutes, showMenuBarItem
+        case preferredTerminal, defaultSSHUser, customTerminalCommand, notifyOnDrift, enableRunbookIntegration, runbookURLTemplate, backgroundScanIntervalMinutes, showMenuBarItem, aiSettings
     }
 
     public init(preferredTerminal: TerminalApp = .ghostty,
@@ -32,7 +93,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 enableRunbookIntegration: Bool = true,
                 runbookURLTemplate: String = "runbook://execute?template=security-audit&host={ip}",
                 backgroundScanIntervalMinutes: Int = 0,
-                showMenuBarItem: Bool = true) {
+                showMenuBarItem: Bool = true,
+                aiSettings: AISettings = AISettings()) {
         self.preferredTerminal = preferredTerminal
         self.defaultSSHUser = defaultSSHUser
         self.customTerminalCommand = customTerminalCommand
@@ -41,6 +103,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.runbookURLTemplate = runbookURLTemplate
         self.backgroundScanIntervalMinutes = backgroundScanIntervalMinutes
         self.showMenuBarItem = showMenuBarItem
+        self.aiSettings = aiSettings
     }
 
     public init(from decoder: Decoder) throws {
@@ -53,6 +116,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         runbookURLTemplate = try container.decodeIfPresent(String.self, forKey: .runbookURLTemplate) ?? "runbook://execute?template=security-audit&host={ip}"
         backgroundScanIntervalMinutes = try container.decodeIfPresent(Int.self, forKey: .backgroundScanIntervalMinutes) ?? 0
         showMenuBarItem = try container.decodeIfPresent(Bool.self, forKey: .showMenuBarItem) ?? true
+        aiSettings = try container.decodeIfPresent(AISettings.self, forKey: .aiSettings) ?? AISettings()
     }
 }
 

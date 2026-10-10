@@ -32,6 +32,7 @@
 - **Background Watchdog**: Configurable background scan timer with native desktop notifications and Menu Bar badge alerts.
 - **Terminal & 1Password Touch ID Integration**: Launch SSH terminal sessions in **Ghostty**, Apple Terminal, or iTerm2 with `~/.ssh/config` alias resolution and `SSH_AUTH_SOCK` Touch ID key authentication.
 - **Runbook Automation Deep-Linking**: One-click integration with [Runbook](https://github.com/msjurset/runbook-mac) (`runbook://execute?template=security-audit&host={ip}`).
+- **Optional AI Security Advisor**: On-demand drift incident triage and host security audit briefs. Strictly additive and disabled by default (supports local private Ollama as well as Google Gemini, Anthropic Claude, and OpenAI BYOK).
 - **100% Offline & Local**: Zero telemetry, zero cloud dependencies. All state persisted locally in JSON.
 
 ---
@@ -41,10 +42,10 @@
 ```
 [ Local Subnet ARP / mDNS ] ──> [ Drifter Scanner Engine ]
                                           │
-                  ┌───────────────────────┴───────────────────────┐
-                  ▼                                               ▼
-      [ Ghostty / SSH Terminal ]                    [ Runbook Automation ]
-   (1Password Touch ID Agent)                  (runbook://execute?template=...)
+                  ┌───────────────────────┼───────────────────────┐
+                  ▼                       ▼                       ▼
+      [ Ghostty / SSH Terminal ]  [ Runbook Automation ]  [ AI Security Advisor ]
+   (1Password Touch ID Agent)   (runbook://execute?...) (Optional Ollama / BYOK)
 ```
 
 ---
