@@ -50,19 +50,28 @@
 
 ---
 
-## Build & Installation
+## Installation
 
-### Prerequisites
+### Via Homebrew (Recommended)
+
+```bash
+brew tap msjurset/tap
+brew install --cask drifter-mac
+```
+
+### From Source
+
+#### Prerequisites
 - macOS 14.0 or later
 - Swift 6.0+ toolchain / Xcode 15+
 
-### Build & Deploy
+#### Build & Deploy Locally
 
 ```bash
 # Run Unit Tests
 make test
 
-# Compile Release Binary & Package App Bundle
+# Compile & Deploy to Local /Applications
 make deploy
 ```
 
