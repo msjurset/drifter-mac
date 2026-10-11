@@ -51,13 +51,22 @@ When you launch Drifter for the first time:
 - **Subnet ARP Sweeping**: Automatically detects your active IPv4 subnet (e.g. `192.168.86.0/24`) and dispatches concurrent, non-blocking UDP probes to warm the macOS kernel ARP cache before querying `/usr/sbin/arp -a`.
 - **Port Probing**: Checks common infrastructure ports (`22` SSH, `53` DNS, `80` HTTP, `443` HTTPS, `8123` Home Assistant, `8080` Web Alt, `5000` Synology).
 - **Native Bonjour Discovery (`NWBrowser`)**: Actively queries Zeroconf/Bonjour broadcasts to identify service names and device categories (`_home-assistant`, `_esphomelib`, `_matter`, `_smb`, `_airplay`, `_printer`).
-- **Expanded Hardware OUI Lookup**: Maps MAC addresses to hardware vendors including Espressif (ESP32/ESP8266), Raspberry Pi, Ubiquiti, Synology, Tuya, Sonoff, Philips Hue, Intel, Dell, Netgear, TP-Link, and Sonos.
+- **Expanded Hardware OUI Lookup**: Maps MAC addresses to hardware vendors including Logitech (Harmony Hub, remotes), Roku, Smart TVs (Samsung, LG, Sony), Espressif (ESP32/ESP8266), Raspberry Pi, Ubiquiti, Synology, Tuya, Sonoff, Philips Hue, Intel, Dell, Netgear, TP-Link, Sonos, Shelly, LIFX, Broadlink, Lutron, Wyze, Eufy, Roborock, Meross, Chamberlain/myQ, Withings, Nanoleaf, Belkin/Wemo, Cisco, ASUS, Amazon Eero, and network printers (HP, Brother, Epson, Canon).
 
 ### Authoritative Baseline Evolution
 Drifter provides an authoritative baseline model:
-1. **Lock Baseline**: Click **Lock Baseline** in Drift Alerts or Settings to snapshot the entire current network state (all known hosts and open ports) as the authoritative gold master.
-2. **Incremental "Approve into Baseline"**: When legitimate changes occur (e.g. you spin up a new container on port 8006 or add a new device), click **Approve** on the alert card. This merges the change directly into that host's baseline without needing to reset or rebuild the rest of the network.
-3. **Rogue Host Detection**: If an unknown device joins an established network baseline, it is immediately flagged as `🔴 Unapproved / Rogue` with a drift alert.
+1. **Bless All & Lock Baseline**: In initial rolling discovery mode (`Baseline: Rolling`), a banner appears above the alert list with a **Bless All (N)** action. Clicking it snapshots all active hosts and ports into the authoritative baseline AND marks all active initial discovery alerts as resolved in a single click.
+2. **Lock Baseline**: Click **Lock Baseline** in Drift Alerts or Settings to snapshot the entire current network state (all known hosts and open ports) as the authoritative gold master without modifying alert statuses.
+3. **Incremental "Approve into Baseline"**: When legitimate changes occur (e.g. you spin up a new container on port 8006 or add a new device), click **Approve** on the alert card or right-click to approve. This merges the change directly into that host's baseline without needing to reset or rebuild the rest of the network.
+4. **Rogue Host Detection**: If an unknown device joins an established network baseline, it is immediately flagged as `🔴 Unapproved / Rogue` with a drift alert.
+
+### Right-Click Alert Context Menus
+Right-click any alert row in **Drift Alerts** to reveal native macOS workflow actions:
+- **AI Security Advisor**: Trigger a **Deep Security Investigation** or **Quick Triage** targeting that specific alert and host.
+- **Host Navigation**: Jump directly to **View Host in Inventory** with the device pre-selected.
+- **Service Launchers**: **Open Web Interface** (detects open HTTP/HTTPS/8080/8123 ports), **Launch SSH Session** in your preferred terminal, or trigger **Runbook Triage**.
+- **Alert Resolution**: **Approve into Baseline**, **Acknowledge Alert**, or **Dismiss Alert** (`trash`).
+- **Clipboard Helpers**: Copy IP address, hostname, or timestamped log details.
 
 ### Drift Alerting
 Whenever Drifter detects a structural change (new open port, closed port, IP lease change, or unapproved host), it generates a **Drift Alert**. Drift alerts appear in:
@@ -84,6 +93,13 @@ Drifter includes an AppKit-backed search bar with **tokenized filter support**:
 | `vendor:raspberry` | Filter hosts manufactured by Raspberry Pi |
 
 You can also use the sidebar categories (**Servers & Storage**, **IoT & Microservices**) to filter hosts by device type.
+
+### Interactive Device Categorization
+Drifter automatically categorizes devices using vendor signatures, hostname keywords, mDNS broadcasts, and open service ports. You can also manually re-assign any device's category:
+1. Select the host in the inventory list.
+2. In the **Device Profile** section, click the **Category** dropdown menu.
+3. Choose from **Server & Storage**, **IoT & Smart Home**, **Workstation & PC**, **Network Infrastructure**, or **Unknown**.
+4. The change persists immediately and updates the sidebar category counters.
 
 <p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
 
@@ -194,20 +210,21 @@ Drifter includes an **optional, purely additive AI Security Advisor**. It is dis
   - **Google Gemini**: Default `gemini-2.5-flash`
   - **Anthropic Claude**: Default `claude-3-5-haiku-latest`
   - **OpenAI**: Default `gpt-4o-mini`
-  - Stored locally in macOS preferences and sent directly to the provider over HTTPS.
+  - **1Password Secret References**: Supports `op://vault/item/credential` URI syntax with local in-memory caching and Touch ID authentication.
 
 ### Capabilities & Usage
-1. **Drift Incident Triage**:
-   - In the **Drift Alerts** tab, click **✦ AI Triage**.
-   - Drifter sends a compact, sanitized summary of unacknowledged events and host metadata (< 300 tokens).
-   - Generates an instant **Security Brief** card with:
-     - **Classification Badge**: `Routine` (green), `Expected` (blue), or `Suspicious` (red).
-     - **Contextual Summary**: 1–2 sentence synthesis explaining vendor context and event implications.
-     - **Actionable Recommendations**: Clear verification commands or network triage steps.
-2. **Host Security Audit**:
-   - On any host detail card, click **✦ AI Audit** in the action bar.
-   - Evaluates open ports, baseline adherence, and hardware category for potential vulnerabilities or unneeded listening services.
-3. **Connection Verification**:
+1. **Fast Triage vs. Deep Security Reasoning**:
+   - **Fast Triage (~1s)**: Fast synthesis with compact token limits for quick, high-level homelab review.
+   - **Deep Security Reasoning**: Extended multi-pass threat modeling (up to 4,096 tokens) with adversarial threat evaluation, lateral movement inspection, and hardware-specific attack surface analysis.
+   - Any fast brief can be escalated to Deep Reasoning in one click.
+2. **Drift Incident Triage**:
+   - In the **Drift Alerts** tab, click **AI Triage** (or select **Deep Security Investigation** from the dropdown menu).
+   - Generates an instant **Security Brief** card with classification, synthesis, and actionable terminal commands.
+3. **Targeted Alert Investigation**:
+   - Right-click any alert row in **Drift Alerts** and select **Deep Security Investigation** to run an isolated, in-depth threat audit targeting that specific host and event.
+4. **Host Security Audit**:
+   - On any host detail card, click **AI Audit** in the action bar (or select Deep Audit from the dropdown).
+5. **Connection Verification**:
    - In **Settings > AI Security Advisor**, click **Test Connection** to immediately verify your local Ollama instance or cloud API key.
 
 ---
