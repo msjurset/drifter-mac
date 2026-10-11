@@ -326,6 +326,11 @@ public final class DrifterStore: ObservableObject {
         saveStore()
     }
 
+    public func removeDriftEvent(id: String) {
+        driftEvents.removeAll(where: { $0.id == id })
+        saveStore()
+    }
+
     /// Locks the current network state (all known hosts and their current open ports) as the authoritative baseline.
     public func lockBaseline() {
         for idx in hosts.indices {

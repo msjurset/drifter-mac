@@ -36,6 +36,9 @@ final class DrifterStoreTests: XCTestCase {
 
         store.acknowledgeEvent(id: event.id)
         XCTAssertTrue(store.driftEvents.first?.acknowledged == true)
+
+        store.removeDriftEvent(id: event.id)
+        XCTAssertEqual(store.driftEvents.count, initialEventCount)
     }
 
     @MainActor

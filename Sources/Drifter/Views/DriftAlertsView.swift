@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct DriftAlertsView: View {
     @ObservedObject var store: DrifterStore
@@ -6,6 +7,8 @@ struct DriftAlertsView: View {
     @State private var isDeepInvestigationRunning: Bool = false
     @State private var aiBrief: AIAnalysisResult? = nil
     @State private var aiError: String? = nil
+    @State private var briefTitle: String = "Drift Incident Triage"
+    @State private var targetInvestigatedEvent: DriftEvent? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -140,13 +143,18 @@ struct DriftAlertsView: View {
             if let brief = aiBrief {
                 AISecurityBriefCard(
                     brief: brief,
-                    title: brief.isDeepReasoning ? "Deep Security Investigation" : "Drift Incident Triage",
+                    title: briefTitle,
                     onDeepInvestigate: {
-                        performAITriage(deepOverride: true)
+                        if let target = targetInvestigatedEvent {
+                            performItemInvestigation(event: target, deep: true)
+                        } else {
+                            performAITriage(deepOverride: true)
+                        }
                     }
                 ) {
                     withAnimation {
                         aiBrief = nil
+                        targetInvestigatedEvent = nil
                     }
                 }
                 .padding(.horizontal)
@@ -176,7 +184,14 @@ struct DriftAlertsView: View {
             } else {
                 List {
                     ForEach(store.driftEvents) { event in
-                        DriftAlertRowView(event: event, store: store)
+                        DriftAlertRowView(
+                            event: event,
+                            store: store,
+                            isAnalyzing: isAnalyzingDrift,
+                            onInvestigate: { ev, deep in
+                                performItemInvestigation(event: ev, deep: deep)
+                            }
+                        )
                     }
                 }
                 .listStyle(.plain)
@@ -185,10 +200,13 @@ struct DriftAlertsView: View {
     }
 
     private func performAITriage(deepOverride: Bool? = nil) {
+        guard !isAnalyzingDrift else { return }
         let isDeep = deepOverride ?? store.settings.aiSettings.deepReasoning
         isAnalyzingDrift = true
         isDeepInvestigationRunning = isDeep
         aiError = nil
+        targetInvestigatedEvent = nil
+        briefTitle = isDeep ? "Deep Security Investigation" : "Drift Incident Triage"
         Task {
             do {
                 let result = try await AIAdvisorService.shared.triageDriftAlerts(
@@ -215,12 +233,79 @@ struct DriftAlertsView: View {
             }
         }
     }
+
+    private func performItemInvestigation(event: DriftEvent, deep: Bool) {
+        guard !isAnalyzingDrift else { return }
+        let hostName = event.hostname.isEmpty ? event.hostIp : event.hostname
+        isAnalyzingDrift = true
+        isDeepInvestigationRunning = deep
+        aiError = nil
+        targetInvestigatedEvent = event
+        briefTitle = deep ? "Deep Investigation: \(hostName)" : "Security Triage: \(hostName)"
+
+        let matchedHost = store.hosts.first(where: { $0.id == event.hostId || $0.ip == event.hostIp })
+            ?? HostItem(ip: event.hostIp, hostname: event.hostname)
+
+        Task {
+            do {
+                let result = try await AIAdvisorService.shared.analyzeHostSecurity(
+                    host: matchedHost,
+                    events: [event],
+                    settings: store.settings.aiSettings,
+                    forceDeepReasoning: deep
+                )
+                await MainActor.run {
+                    withAnimation {
+                        aiBrief = result
+                        isAnalyzingDrift = false
+                        isDeepInvestigationRunning = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation {
+                        aiError = error.localizedDescription
+                        isAnalyzingDrift = false
+                        isDeepInvestigationRunning = false
+                    }
+                }
+            }
+        }
+    }
 }
 
 private struct DriftAlertRowView: View {
     let event: DriftEvent
     @ObservedObject var store: DrifterStore
+    var isAnalyzing: Bool = false
+    var onInvestigate: ((DriftEvent, Bool) -> Void)? = nil
     @State private var showExplainer = false
+
+    private var matchedHost: HostItem? {
+        store.hosts.first(where: { $0.id == event.hostId || $0.ip == event.hostIp })
+    }
+
+    private var webURL: URL? {
+        let ports = matchedHost?.openPorts ?? []
+        if ports.contains(443) {
+            return URL(string: "https://\(event.hostIp)")
+        } else if ports.contains(80) {
+            return URL(string: "http://\(event.hostIp)")
+        } else if ports.contains(8123) {
+            return URL(string: "http://\(event.hostIp):8123")
+        } else if ports.contains(8080) {
+            return URL(string: "http://\(event.hostIp):8080")
+        } else if event.detail.contains("443") {
+            return URL(string: "https://\(event.hostIp)")
+        } else if event.detail.contains("8123") {
+            return URL(string: "http://\(event.hostIp):8123")
+        } else if event.detail.contains("8080") {
+            return URL(string: "http://\(event.hostIp):8080")
+        } else if event.detail.contains("80") {
+            return URL(string: "http://\(event.hostIp)")
+        }
+        return nil
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -273,7 +358,7 @@ private struct DriftAlertRowView: View {
             HStack(spacing: 6) {
                 if store.settings.enableRunbookIntegration {
                     Button("Runbook") {
-                        if let host = store.hosts.first(where: { $0.id == event.hostId || $0.ip == event.hostIp }) {
+                        if let host = matchedHost {
                             RunbookLauncher.launchRunbook(host: host, event: event, store: store)
                         } else {
                             let tempHost = HostItem(ip: event.hostIp, hostname: event.hostname)
@@ -306,6 +391,114 @@ private struct DriftAlertRowView: View {
             }
         }
         .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .contextMenu {
+            if store.settings.aiSettings.enabled {
+                Section {
+                    Button {
+                        onInvestigate?(event, true)
+                    } label: {
+                        Label("Deep Security Investigation", systemImage: "brain.head.profile")
+                    }
+                    .disabled(isAnalyzing)
+
+                    Button {
+                        onInvestigate?(event, false)
+                    } label: {
+                        Label("Quick Triage", systemImage: "bolt.fill")
+                    }
+                    .disabled(isAnalyzing)
+                }
+            }
+
+            Section {
+                if let host = matchedHost {
+                    Button {
+                        store.selectedHostId = host.id
+                        store.activeTab = .allHosts
+                    } label: {
+                        Label("View Host in Inventory", systemImage: "display")
+                    }
+                }
+
+                if let url = webURL {
+                    Button {
+                        NSWorkspace.shared.open(url)
+                    } label: {
+                        Label("Open Web Interface", systemImage: "safari")
+                    }
+                }
+
+                Button {
+                    TerminalLauncher.launchSSH(ip: event.hostIp, hostname: event.hostname, store: store)
+                } label: {
+                    Label("Launch SSH Session", systemImage: "terminal")
+                }
+
+                if store.settings.enableRunbookIntegration {
+                    Button {
+                        if let host = matchedHost {
+                            RunbookLauncher.launchRunbook(host: host, event: event, store: store)
+                        } else {
+                            let tempHost = HostItem(ip: event.hostIp, hostname: event.hostname)
+                            RunbookLauncher.launchRunbook(host: tempHost, event: event, store: store)
+                        }
+                    } label: {
+                        Label("Runbook Triage", systemImage: "book.closed")
+                    }
+                }
+            }
+
+            Section {
+                if !event.acknowledged {
+                    Button {
+                        store.approveDrift(for: event)
+                    } label: {
+                        Label("Approve into Baseline", systemImage: "checkmark.shield")
+                    }
+
+                    Button {
+                        store.acknowledgeEvent(id: event.id)
+                    } label: {
+                        Label("Acknowledge Alert", systemImage: "bell.slash")
+                    }
+                }
+
+                Button(role: .destructive) {
+                    store.removeDriftEvent(id: event.id)
+                } label: {
+                    Label("Dismiss Alert", systemImage: "trash")
+                }
+            }
+
+            Section {
+                Button {
+                    copyToPasteboard(event.hostIp)
+                } label: {
+                    Label("Copy IP Address", systemImage: "doc.on.doc")
+                }
+
+                if !event.hostname.isEmpty {
+                    Button {
+                        copyToPasteboard(event.hostname)
+                    } label: {
+                        Label("Copy Hostname", systemImage: "doc.on.doc")
+                    }
+                }
+
+                Button {
+                    let formatted = "[\(event.timestamp.formatted(date: .abbreviated, time: .standard))] \(event.type.replacingOccurrences(of: "_", with: " ").capitalized) - \(event.hostname.isEmpty ? event.hostIp : event.hostname) (\(event.hostIp)): \(event.detail)"
+                    copyToPasteboard(formatted)
+                } label: {
+                    Label("Copy Alert Details", systemImage: "doc.on.doc.fill")
+                }
+            }
+        }
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     private func iconForType(_ type: String) -> String {

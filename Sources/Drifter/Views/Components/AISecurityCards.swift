@@ -12,7 +12,7 @@ struct AISecurityBriefCard: View {
                 Image(systemName: brief.isDeepReasoning ? "brain.head.profile" : "sparkles")
                     .foregroundStyle(brief.isDeepReasoning ? .indigo : .purple)
 
-                Text(brief.isDeepReasoning ? "Deep Security Investigation" : title)
+                Text(title)
                     .font(.headline)
 
                 classificationBadge(brief.classification)
