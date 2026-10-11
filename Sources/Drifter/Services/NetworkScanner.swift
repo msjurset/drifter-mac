@@ -37,16 +37,13 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
                         if openPorts.contains(22) { mdns.append("_ssh._tcp") }
                     }
 
-                    var category = "unknown"
-                    if openPorts.contains(8123) || mdns.contains("_home-assistant._tcp") || mdns.contains("_esphomelib._tcp") || mdns.contains("_matter._tcp") || vendor.contains("Espressif") || vendor.contains("Tuya") || vendor.contains("Philips") || vendor.contains("Sonos") {
-                        category = "iot"
-                    } else if openPorts.contains(5000) || openPorts.contains(8080) || mdns.contains("_smb._tcp") || vendor.contains("Synology") || vendor.contains("Supermicro") {
-                        category = "server"
-                    } else if openPorts.contains(53) || vendor.contains("Ubiquiti") || vendor.contains("UniFi") || vendor.contains("MikroTik") || vendor.contains("Netgear") || vendor.contains("TP-Link") {
-                        category = "network"
-                    } else if !mac.isEmpty {
-                        category = "workstation"
-                    }
+                    let category = NetworkScanner.categorizeHost(
+                        vendor: vendor,
+                        hostname: hostname,
+                        openPorts: openPorts,
+                        mdnsServices: mdns,
+                        mac: mac
+                    )
 
                     return HostItem(
                         ip: ip,
@@ -198,5 +195,88 @@ public final class NetworkScanner: NSObject, ObservableObject, @unchecked Sendab
             return (!resolved.isEmpty && resolved != ip) ? resolved : ip
         }
         return ip
+    }
+
+    /// Evaluates device category from hardware vendor, hostname, open ports, and mDNS advertisements.
+    public static func categorizeHost(
+        vendor: String,
+        hostname: String,
+        openPorts: [Int],
+        mdnsServices: [String],
+        mac: String = ""
+    ) -> String {
+        let v = vendor.lowercased()
+        let h = hostname.lowercased()
+        let m = mdnsServices.map { $0.lowercased() }
+
+        // 1. Explicit IoT / Smart Home Devices
+        let iotVendors = [
+            "logitech", "roku", "nest", "ring", "blink", "espressif", "tuya",
+            "philips", "signify", "sonos", "shelly", "allterco", "lifx", "broadlink",
+            "lutron", "wyze", "eufy", "anker", "roborock", "ecovacs", "meross",
+            "chamberlain", "myq", "withings", "nanoleaf", "wemo", "belkin",
+            "sonoff", "itead", "samsung electronics", "lg electronics", "sony"
+        ]
+        let iotKeywords = [
+            "harmony", "hub", "tv", "roku", "appletv", "apple-tv", "homepod", "echo",
+            "alexa", "nest", "plug", "bulb", "sensor", "cam", "camera", "doorbell",
+            "speaker", "audio", "switch", "light", "wled", "tasmota", "esphome",
+            "smart", "vacuum", "thermostat", "lock", "scale", "hue"
+        ]
+        let iotMdns = [
+            "_home-assistant._tcp", "_esphomelib._tcp", "_matter._tcp", "_airplay._tcp",
+            "_raop._tcp", "_googlecast._tcp", "_spotify-connect._tcp", "_sonos._tcp",
+            "_hap._tcp", "_printer._tcp", "_ipp._tcp"
+        ]
+
+        if openPorts.contains(8123) ||
+           m.contains(where: { svc in iotMdns.contains(where: { svc.contains($0) }) }) ||
+           iotVendors.contains(where: { v.contains($0) }) ||
+           iotKeywords.contains(where: { h.contains($0) }) {
+            return "iot"
+        }
+
+        // 2. Servers & Homelab Storage
+        let serverVendors = ["synology", "supermicro", "qnap", "truenas", "unraid", "dell", "hp enterprise", "hpe"]
+        let serverKeywords = [
+            "server", "nas", "proxmox", "pve", "truenas", "unraid", "pihole",
+            "adguard", "docker", "vaultwarden", "nextcloud", "plex", "jellyfin", "storage"
+        ]
+        let serverPorts = [5000, 5001, 8006, 32400, 8096, 9000]
+
+        if serverPorts.contains(where: { openPorts.contains($0) }) ||
+           m.contains(where: { $0.contains("_smb._tcp") || $0.contains("_nfs._tcp") }) ||
+           serverVendors.contains(where: { v.contains($0) }) ||
+           serverKeywords.contains(where: { h.contains($0) }) {
+            return "server"
+        }
+
+        // 3. Network Infrastructure
+        let networkVendors = ["ubiquiti", "unifi", "mikrotik", "netgear", "tp-link", "cisco", "asus", "aruba", "eero"]
+        let networkKeywords = ["router", "gateway", "switch", "ap", "accesspoint", "firewall", "udm", "usg", "edgerouter", "mesh"]
+
+        if openPorts.contains(53) || openPorts.contains(161) ||
+           networkVendors.contains(where: { v.contains($0) }) ||
+           networkKeywords.contains(where: { h.contains($0) }) {
+            return "network"
+        }
+
+        // 4. Workstations, Laptops & Mobile Clients
+        let workstationVendors = ["apple", "intel", "dell", "lenovo", "microsoft", "framework", "hp inc."]
+        let workstationKeywords = [
+            "macbook", "imac", "mac-mini", "mac-studio", "mac-pro", "laptop", "desktop",
+            "pc", "thinkpad", "surface", "workstation", "iphone", "ipad"
+        ]
+
+        if workstationKeywords.contains(where: { h.contains($0) }) {
+            return "workstation"
+        }
+
+        if workstationVendors.contains(where: { v.contains($0) }) {
+            return "workstation"
+        }
+
+        // 5. Default
+        return "unknown"
     }
 }

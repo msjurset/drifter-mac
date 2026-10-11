@@ -277,7 +277,43 @@ struct HostDetailView: View {
                         GridRow {
                             Text("Category:")
                                 .foregroundStyle(.secondary)
-                            Text(host.category.capitalized)
+                            Menu {
+                                Button {
+                                    store.updateHostCategory(id: host.id, category: "server")
+                                } label: {
+                                    Label("Server & Storage", systemImage: "server.rack")
+                                }
+                                Button {
+                                    store.updateHostCategory(id: host.id, category: "iot")
+                                } label: {
+                                    Label("IoT & Smart Home", systemImage: "cpu")
+                                }
+                                Button {
+                                    store.updateHostCategory(id: host.id, category: "workstation")
+                                } label: {
+                                    Label("Workstation & PC", systemImage: "desktopcomputer")
+                                }
+                                Button {
+                                    store.updateHostCategory(id: host.id, category: "network")
+                                } label: {
+                                    Label("Network Infrastructure", systemImage: "network")
+                                }
+                                Button {
+                                    store.updateHostCategory(id: host.id, category: "unknown")
+                                } label: {
+                                    Label("Unknown", systemImage: "questionmark.circle")
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: categoryIcon(host.category))
+                                    Text(categoryTitle(host.category))
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
                         }
                         GridRow {
                             Text("Baseline Status:")
@@ -512,12 +548,22 @@ struct HostDetailView: View {
     }
 
     private func categoryIcon(_ category: String) -> String {
-        switch category {
+        switch category.lowercased() {
         case "server": return "server.rack"
         case "iot": return "cpu"
         case "network": return "network"
         case "workstation": return "desktopcomputer"
-        default: return "laptopcomputer"
+        default: return "questionmark.circle"
+        }
+    }
+
+    private func categoryTitle(_ category: String) -> String {
+        switch category.lowercased() {
+        case "server": return "Server & Storage"
+        case "iot": return "IoT & Smart Home"
+        case "workstation": return "Workstation & PC"
+        case "network": return "Network Infrastructure"
+        default: return "Unknown"
         }
     }
 

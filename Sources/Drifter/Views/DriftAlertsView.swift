@@ -83,13 +83,52 @@ struct DriftAlertsView: View {
                         .disabled(isAnalyzingDrift || store.driftEvents.isEmpty)
                     }
 
-                    Button {
-                        store.lockBaseline()
+                    Menu {
+                        Button {
+                            store.blessAllIntoBaseline()
+                        } label: {
+                            Label("Bless All & Lock Baseline", systemImage: "checkmark.shield.fill")
+                        }
+
+                        Button {
+                            store.lockBaseline(acknowledgeActiveAlerts: false)
+                        } label: {
+                            Label("Lock Baseline Only", systemImage: "lock.shield")
+                        }
+
+                        if store.driftEvents.contains(where: { !$0.acknowledged }) {
+                            Divider()
+
+                            Button {
+                                store.acknowledgeAllAlerts()
+                            } label: {
+                                Label("Acknowledge All Alerts", systemImage: "bell.slash")
+                            }
+                        }
+
+                        Divider()
+
+                        Button {
+                            store.autoCategorizeHosts()
+                        } label: {
+                            Label("Re-scan Device Categories", systemImage: "sparkle.magnifyingglass")
+                        }
                     } label: {
-                        Label("Lock Baseline", systemImage: "lock.shield.fill")
+                        Label(store.lastBaselineLockDate == nil ? "Bless Baseline" : "Lock Baseline",
+                              systemImage: store.lastBaselineLockDate == nil ? "checkmark.shield.fill" : "lock.shield.fill")
+                    } primaryAction: {
+                        if store.lastBaselineLockDate == nil {
+                            store.blessAllIntoBaseline()
+                        } else {
+                            store.lockBaseline(acknowledgeActiveAlerts: false)
+                        }
                     }
                     .buttonStyle(.bordered)
-                    .help("Snapshot all currently known hosts and ports as the authoritative baseline")
+                    .tint(store.lastBaselineLockDate == nil ? .green : nil)
+                    .menuStyle(.borderedButton)
+                    .help(store.lastBaselineLockDate == nil
+                          ? "Bless all current hosts and ports into authoritative baseline and acknowledge discovery alerts"
+                          : "Snapshot current network state as the authoritative baseline")
                     .focusable(false)
 
                     Menu {
@@ -139,6 +178,27 @@ struct DriftAlertsView: View {
             .padding()
 
             Divider()
+
+            if store.lastBaselineLockDate == nil && !store.driftEvents.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundStyle(.blue)
+                    Text("Operating in rolling discovery mode. Click **Bless All** to snapshot your network as the authoritative baseline and resolve initial alerts.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Bless All (\(store.driftEvents.filter { !$0.acknowledged }.count))") {
+                        store.blessAllIntoBaseline()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(.green)
+                    .focusable(false)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color.blue.opacity(0.08))
+            }
 
             if let brief = aiBrief {
                 AISecurityBriefCard(

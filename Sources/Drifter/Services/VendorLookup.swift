@@ -84,10 +84,78 @@ public final class VendorLookup {
         add(["000C42", "18FD74", "2C3996", "488F5A", "64D154", "744D28", "789A18", "B869F4"], vendor: "MikroTik")
 
         // Google / Nest
-        add(["001A11", "1C56FE", "3C5AB4", "546009", "641666", "70EE50", "94EB2C", "D86C63"], vendor: "Google / Nest")
+        add(["001A11", "1C56FE", "3C5AB4", "546009", "641666", "70EE50", "94EB2C", "D86C63", "F80FF9", "44070B", "48D6D5", "64BC0C", "E4F042", "F40304", "F4F5D8", "F4F5E8"], vendor: "Google / Nest")
 
-        // Amazon / Ring
-        add(["00FC8B", "0C47C9", "18742E", "24F5AA", "34D270", "44650D", "50DC01", "68545A", "78E103"], vendor: "Amazon / Ring")
+        // Amazon / Ring / Blink
+        add([
+            "00FC8B", "0C47C9", "18742E", "24F5AA", "34D270", "44650D", "50DC01", "68545A", "78E103",
+            "A002DC", "AC63BE", "F0F002", "FC65DE", "40B4CD", "6837E9", "74C246", "84D6D0", "CC9E00", "F08173", "FC58FA"
+        ], vendor: "Amazon / Ring")
+
+        // Logitech (Harmony Hub, Remotes, AV controllers)
+        add([
+            "000420", "001F20", "002454", "04021F", "000B24", "001227", "10F005", "34885D", "482C6A", "88C9D0", "C83A35"
+        ], vendor: "Logitech")
+
+        // Roku Inc.
+        add([
+            "000D4B", "080581", "20EFBD", "84EA99", "B0EE45", "CC6DA0", "DC3A5E", "D83134", "AC3A7A"
+        ], vendor: "Roku Inc.")
+
+        // Smart TVs & AV
+        add([
+            "0007AB", "001247", "001632", "002119", "14BB6E", "244B81", "4844F7", "641CAE", "78ABBB",
+            "8425DB", "A00798", "BC8556", "CCB11A", "E8039A", "F47B5E", "5056A8", "9439E5", "B86C26"
+        ], vendor: "Samsung Electronics")
+
+        add([
+            "0005C9", "001C62", "001E75", "10683F", "203D66", "3CCD36", "58A2B5", "64995D", "702C1F",
+            "88366C", "A823FE", "C4366C", "F44EFB"
+        ], vendor: "LG Electronics")
+
+        add([
+            "00014A", "001315", "001A80", "001DBA", "0024BE", "045D4B", "0CFE45", "544249", "709E29", "A41566", "F0BF97"
+        ], vendor: "Sony Corporation")
+
+        // Smart Home & IoT Specialists
+        add(["4022D8", "34987A", "C4D845", "80646F"], vendor: "Shelly / Allterco")
+        add(["D073D5"], vendor: "LIFX")
+        add(["B4430D", "780F77", "24DFA7"], vendor: "Broadlink")
+        add(["000FE7", "50F14A"], vendor: "Lutron Electronics")
+        add(["7C78B2", "A4DA22"], vendor: "Wyze Labs")
+        add(["0417B6", "282C02", "AC1203", "C83173"], vendor: "Eufy / Anker")
+        add(["384F9B", "788B2A", "ECFA5C"], vendor: "Roborock / Ecovacs")
+        add(["48E1E9"], vendor: "Meross Smart Home")
+        add(["78923C", "C8F29E"], vendor: "Chamberlain / myQ")
+        add(["0024E4"], vendor: "Withings")
+        add(["98D863"], vendor: "Nanoleaf")
+        add([
+            "00173F", "002275", "149182", "24F5A2", "6038E0", "94103E", "C05627", "EC1A59"
+        ], vendor: "Belkin / Wemo")
+
+        // Routers & Network Infrastructure
+        add([
+            "000142", "000164", "000196", "0001C7", "0002B9", "00044D", "00055E", "00067C", "00070E",
+            "001121", "001380", "001469", "001646", "001759", "001794", "001818", "001874", "001955",
+            "001A2F", "001BD4", "001BE9", "001C0E", "001CB0", "001D45", "001D70", "001EA1", "001F6C",
+            "002155", "002255", "002304", "002414", "002584", "00260B", "002698", "003A98", "004096"
+        ], vendor: "Cisco Systems")
+
+        add([
+            "000C6E", "000E0C", "0011D8", "0013D4", "0015F2", "001731", "0018F3", "001A92", "001BFC",
+            "001E8C", "002215", "002354", "00248C", "002618", "049226", "08606E", "086266", "107B44",
+            "14DAE9", "1831BF", "1C872C", "20CF30", "2C4D54", "2CFD01", "305A3A", "382C4A", "40167E"
+        ], vendor: "ASUS")
+
+        add(["50C7BF", "589CF8", "704F57", "9C7613"], vendor: "Amazon Eero")
+
+        // Network Printers
+        add([
+            "0001E6", "000E7F", "001E0B", "082E5F", "101F74", "10604B", "3C5282", "40F407", "9C8E99"
+        ], vendor: "HP Inc.")
+        add(["008077", "001BA9", "30055C", "001B67"], vendor: "Brother Industries")
+        add(["000048", "0026AB", "AC1826"], vendor: "Epson")
+        add(["000085", "001E8F", "84BA3B"], vendor: "Canon Inc.")
 
         return map
     }()

@@ -105,4 +105,33 @@ final class DrifterStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.hosts.first?.baselinePorts, [80, 8006])
         XCTAssertNotNil(reloaded.lastBaselineLockDate)
     }
+
+    @MainActor
+    func testBlessAllIntoBaselineAndCategoryUpdate() {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let fileURL = tempDir.appendingPathComponent("test_store.json")
+
+        let store = DrifterStore(storageFileURL: fileURL)
+        let host = HostItem(id: "h2", ip: "192.168.1.60", mac: "00:04:20:11:22:33", hostname: "HarmonyHub.local", openPorts: [5222])
+        store.updateHost(host)
+
+        let alert = DriftEvent(hostId: "h2", hostIp: "192.168.1.60", hostname: "HarmonyHub.local", type: "new_host", detail: "New host discovered")
+        store.addDriftEvent(alert)
+
+        XCTAssertFalse(store.driftEvents.first?.acknowledged == true)
+        XCTAssertNil(store.lastBaselineLockDate)
+
+        // Bless All into baseline
+        store.blessAllIntoBaseline()
+
+        XCTAssertTrue(store.driftEvents.first?.acknowledged == true)
+        XCTAssertNotNil(store.lastBaselineLockDate)
+        XCTAssertEqual(store.hosts.first?.baselinePorts, [5222])
+        XCTAssertTrue(store.hosts.first?.isApprovedHost == true)
+
+        // Update category manually
+        store.updateHostCategory(id: "h2", category: "iot")
+        XCTAssertEqual(store.hosts.first?.category, "iot")
+    }
 }

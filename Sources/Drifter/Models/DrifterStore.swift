@@ -250,6 +250,7 @@ public final class DrifterStore: ObservableObject {
         }
         loadStore()
         purgeSampleHostsIfNeeded()
+        autoCategorizeHostsIfNeeded()
     }
 
     private func loadStore() {
@@ -273,6 +274,39 @@ public final class DrifterStore: ObservableObject {
         if hosts.contains(where: { $0.id.hasPrefix("sample-") }) {
             hosts.removeAll { $0.id.hasPrefix("sample-") }
             driftEvents.removeAll { $0.hostId.hasPrefix("sample-") }
+            saveStore()
+        }
+    }
+
+    private func autoCategorizeHostsIfNeeded() {
+        var didChange = false
+        for idx in hosts.indices {
+            let host = hosts[idx]
+            let currentVendor = host.vendor
+            let updatedVendor = (currentVendor.isEmpty || currentVendor == "Local Network Device")
+                ? VendorLookup.lookup(mac: host.mac)
+                : currentVendor
+
+            if updatedVendor != currentVendor && !updatedVendor.isEmpty && updatedVendor != "Local Network Device" {
+                hosts[idx].vendor = updatedVendor
+                didChange = true
+            }
+
+            if host.category == "workstation" || host.category == "unknown" {
+                let recomputed = NetworkScanner.categorizeHost(
+                    vendor: hosts[idx].vendor,
+                    hostname: host.hostname,
+                    openPorts: host.openPorts,
+                    mdnsServices: host.mdnsServices,
+                    mac: host.mac
+                )
+                if recomputed != host.category && recomputed != "unknown" {
+                    hosts[idx].category = recomputed
+                    didChange = true
+                }
+            }
+        }
+        if didChange {
             saveStore()
         }
     }
@@ -331,8 +365,16 @@ public final class DrifterStore: ObservableObject {
         saveStore()
     }
 
+    /// Acknowledges all drift events currently recorded
+    public func acknowledgeAllAlerts() {
+        for idx in driftEvents.indices {
+            driftEvents[idx].acknowledged = true
+        }
+        saveStore()
+    }
+
     /// Locks the current network state (all known hosts and their current open ports) as the authoritative baseline.
-    public func lockBaseline() {
+    public func lockBaseline(acknowledgeActiveAlerts: Bool = false) {
         for idx in hosts.indices {
             hosts[idx].baselinePorts = hosts[idx].openPorts
             hosts[idx].isApprovedHost = true
@@ -340,7 +382,44 @@ public final class DrifterStore: ObservableObject {
                 hosts[idx].status = "online"
             }
         }
+        if acknowledgeActiveAlerts {
+            for idx in driftEvents.indices {
+                driftEvents[idx].acknowledged = true
+            }
+        }
         self.lastBaselineLockDate = Date()
+        saveStore()
+    }
+
+    /// Blesses all known hosts into baseline and acknowledges all active drift alerts in one step.
+    public func blessAllIntoBaseline() {
+        lockBaseline(acknowledgeActiveAlerts: true)
+    }
+
+    /// Updates the category for an individual host ("server", "iot", "workstation", "network", "unknown")
+    public func updateHostCategory(id: String, category: String) {
+        if let idx = hosts.firstIndex(where: { $0.id == id }) {
+            hosts[idx].category = category.lowercased()
+            saveStore()
+        }
+    }
+
+    /// Re-evaluates categories for all existing hosts using updated vendor, mDNS, and port heuristics
+    public func autoCategorizeHosts() {
+        for idx in hosts.indices {
+            let host = hosts[idx]
+            let vendor = VendorLookup.lookup(mac: host.mac)
+            if !vendor.isEmpty && vendor != "Local Network Device" {
+                hosts[idx].vendor = vendor
+            }
+            hosts[idx].category = NetworkScanner.categorizeHost(
+                vendor: hosts[idx].vendor,
+                hostname: host.hostname,
+                openPorts: host.openPorts,
+                mdnsServices: host.mdnsServices,
+                mac: host.mac
+            )
+        }
         saveStore()
     }
 
