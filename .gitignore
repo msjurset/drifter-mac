@@ -10,3 +10,5 @@ CLAUDE.md
 *.sqlite
 *.sqlite-journal
 drifter_debug.log
+dist/
+
