@@ -355,6 +355,13 @@ final class DrifterDocsScreenshotTests: XCTestCase {
             )
             try pngData.write(to: url)
         }
+
+        if !callouts.isEmpty {
+            let cleanPaths = paths.filter { $0.hasSuffix(".png") }.map { String($0.dropLast(4)) + "_clean.png" }
+            if !cleanPaths.isEmpty {
+                try renderAnnotatedSnapshot(view, callouts: [], size: size, to: cleanPaths)
+            }
+        }
     }
 
     @MainActor
