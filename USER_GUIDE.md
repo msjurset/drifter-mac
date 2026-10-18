@@ -39,16 +39,14 @@ When you launch Drifter for the first time:
 2. **Initial Subnet Scan**: If your host list is empty, Drifter automatically triggers a subnet scan using your Mac's ARP table.
 3. **Manual Scan**: Click **Scan Local Network** at the bottom of the sidebar at any time to run an instant scan.
 
-<p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
-
-![Drifter All Hosts Dashboard](docs/images/dashboard.png)
+![Drifter All Hosts Dashboard](docs/assets/network_dashboard.png)
 
 ---
 
 ## 3. Network Discovery & Authoritative Baselining
 
 ### How Discovery Works
-- **Subnet ARP Sweeping**: Automatically detects your active IPv4 subnet (e.g. `192.168.86.0/24`) and dispatches concurrent, non-blocking UDP probes to warm the macOS kernel ARP cache before querying `/usr/sbin/arp -a`.
+- **Subnet ARP Sweeping**: Automatically detects your active IPv4 subnet (e.g. `10.0.20.0/24`) and dispatches concurrent, non-blocking UDP probes to warm the macOS kernel ARP cache before querying `/usr/sbin/arp -a`.
 - **Port Probing**: Checks common infrastructure ports (`22` SSH, `53` DNS, `80` HTTP, `443` HTTPS, `8123` Home Assistant, `8080` Web Alt, `5000` Synology).
 - **Native Bonjour Discovery (`NWBrowser`)**: Actively queries Zeroconf/Bonjour broadcasts to identify service names and device categories (`_home-assistant`, `_esphomelib`, `_matter`, `_smb`, `_airplay`, `_printer`).
 - **Expanded Hardware OUI Lookup**: Maps MAC addresses to hardware vendors including Logitech (Harmony Hub, remotes), Roku, Smart TVs (Samsung, LG, Sony), Espressif (ESP32/ESP8266), Raspberry Pi, Ubiquiti, Synology, Tuya, Sonoff, Philips Hue, Intel, Dell, Netgear, TP-Link, Sonos, Shelly, LIFX, Broadlink, Lutron, Wyze, Eufy, Roborock, Meross, Chamberlain/myQ, Withings, Nanoleaf, Belkin/Wemo, Cisco, ASUS, Amazon Eero, and network printers (HP, Brother, Epson, Canon).
@@ -74,9 +72,7 @@ Whenever Drifter detects a structural change (new open port, closed port, IP lea
 - The macOS **Menu Bar** icon badge.
 - Native macOS desktop notifications (when enabled).
 
-<p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
-
-![Drift & Security Alerts](docs/images/alerts.png)
+![Drift & Security Alerts](docs/assets/drift_alerts.png)
 
 ---
 
@@ -86,11 +82,11 @@ Drifter includes an AppKit-backed search bar with **tokenized filter support**:
 
 | Search Query | Filter Action |
 | :--- | :--- |
-| `192.168.86.` | Filter hosts matching IP subnet `192.168.86.*` |
-| `pi.hole` | Filter hosts by hostname |
+| `ip:10.0.20.` | Filter hosts matching IP subnet `10.0.20.*` |
+| `dns-sinkhole` | Filter hosts by hostname |
 | `port:22` | Show hosts with SSH port 22 open |
 | `status:drift` | Show hosts with active drift alerts |
-| `vendor:raspberry` | Filter hosts manufactured by Raspberry Pi |
+| `synology` | Filter hosts by hardware vendor or hostname |
 
 You can also use the sidebar categories (**Servers & Storage**, **IoT & Microservices**) to filter hosts by device type.
 
@@ -101,9 +97,7 @@ Drifter automatically categorizes devices using vendor signatures, hostname keyw
 3. Choose from **Server & Storage**, **IoT & Smart Home**, **Workstation & PC**, **Network Infrastructure**, or **Unknown**.
 4. The change persists immediately and updates the sidebar category counters.
 
-<p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
-
-![Device Categories Filtering](docs/images/categories.png)
+![Device Categories Filtering](docs/assets/device_categories.png)
 
 ---
 
@@ -114,7 +108,7 @@ Clicking the **SSH** button on any host card launches a terminal window directly
 
 ### Automatic `~/.ssh/config` Resolution
 Drifter automatically parses your `~/.ssh/config` file to resolve Host aliases and IP mappings:
-- If `192.168.86.55` is mapped to `Host pi-hole` in `~/.ssh/config`, Drifter executes `ssh pi-hole`.
+- If `10.0.20.53` is mapped to `Host dns-sinkhole` in `~/.ssh/config`, Drifter executes `ssh dns-sinkhole`.
 - OpenSSH automatically applies your configured `User`, `Port`, `IdentityFile`, and `IdentityAgent`.
 
 ### 1Password Touch ID Support
@@ -137,7 +131,7 @@ Drifter integrates directly with [Runbook](https://github.com/msjurset/runbook-m
 - Click **Runbook** on any host detail card or Drift Alert card.
 - Drifter constructs a parameterized deep-link:
   ```
-  runbook://execute?template=security-audit&host=192.168.86.55
+  runbook://execute?template=security-audit&host=10.0.20.15
   ```
 - Runbook opens directly and pre-selects the relevant audit procedure with variables pre-filled.
 
@@ -240,9 +234,7 @@ Navigate to **Settings** in the sidebar to configure:
 - **Drift Alert Notifications**: Enable or disable macOS desktop notifications.
 - **AI Security Advisor**: Enable optional local Ollama or cloud BYOK security analysis.
 
-<p align="right"><sub><em>Image anonymized by <a href="https://github.com/msjurset/anonymark">msjurset/anonymark</a></em></sub></p>
-
-![Drifter Settings](docs/images/settings.png)
+![Drifter Settings](docs/assets/settings_scanner.png)
 
 ---
 

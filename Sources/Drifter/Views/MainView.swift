@@ -1,11 +1,18 @@
 import SwiftUI
 
-struct MainView: View {
-    @StateObject var store = DrifterStore()
-    @State private var filterText: String = ""
+public struct MainView: View {
+    @ObservedObject var store: DrifterStore
+    @State private var filterText: String
+    private let autoScanOnEmpty: Bool
 
     @AppStorage("drifter_sidebarWidth") private var sidebarWidth: Double = 220
     @AppStorage("drifter_hostListWidth") private var hostListWidth: Double = 280
+
+    public init(store: DrifterStore = DrifterStore(), initialFilter: String = "", autoScanOnEmpty: Bool = true) {
+        self.store = store
+        self._filterText = State(initialValue: initialFilter)
+        self.autoScanOnEmpty = autoScanOnEmpty
+    }
 
     private var sidebarWidthBinding: Binding<CGFloat> {
         Binding<CGFloat>(
@@ -33,7 +40,7 @@ struct MainView: View {
         store.hosts.filter { $0.category == "iot" }.count
     }
 
-    var body: some View {
+    public var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 List(selection: $store.activeTab) {
@@ -56,6 +63,9 @@ struct MainView: View {
                     Section("Configuration") {
                         Label("Settings", systemImage: "gear")
                             .tag(SidebarTab.settings)
+
+                        Label("User Guide & Help", systemImage: "book.pages")
+                            .tag(SidebarTab.help)
                     }
                 }
                 .listStyle(.sidebar)
@@ -129,6 +139,9 @@ struct MainView: View {
             } else if store.activeTab == .settings {
                 SettingsView(store: store)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if store.activeTab == .help {
+                HelpView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HStack(spacing: 0) {
                     HostListView(
@@ -166,8 +179,10 @@ struct MainView: View {
                 }
             }
         }
+        .background(Color(NSColor.windowBackgroundColor))
         .frame(minWidth: 920, minHeight: 580)
         .onAppear {
+            guard autoScanOnEmpty else { return }
             MenuBarManager.shared.setup(store: store)
             if store.hosts.isEmpty {
                 Task {

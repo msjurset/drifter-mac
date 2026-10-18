@@ -224,6 +224,7 @@ public enum SidebarTab: Hashable, Codable {
     case servers
     case iotDevices
     case settings
+    case help
 }
 
 @MainActor
@@ -251,6 +252,24 @@ public final class DrifterStore: ObservableObject {
         loadStore()
         purgeSampleHostsIfNeeded()
         autoCategorizeHostsIfNeeded()
+    }
+
+    public func seedSyntheticState(
+        hosts: [HostItem],
+        driftEvents: [DriftEvent],
+        settings: AppSettings = AppSettings(),
+        activeTab: SidebarTab = .allHosts,
+        selectedHostId: String? = nil,
+        lastScanDate: Date? = Date(),
+        lastBaselineLockDate: Date? = nil
+    ) {
+        self.hosts = hosts
+        self.driftEvents = driftEvents
+        self.settings = settings
+        self.activeTab = activeTab
+        self.selectedHostId = selectedHostId ?? hosts.first?.id
+        self.lastScanDate = lastScanDate
+        self.lastBaselineLockDate = lastBaselineLockDate
     }
 
     private func loadStore() {
