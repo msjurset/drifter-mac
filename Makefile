@@ -3,7 +3,7 @@
 APP_NAME = Drifter
 BUILD_DIR = .build
 APP_BUNDLE = $(APP_NAME).app
-VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist 2>/dev/null || echo "1.1.0")
+VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist 2>/dev/null || echo "1.1.1")
 
 build:
 	swift build -c debug
