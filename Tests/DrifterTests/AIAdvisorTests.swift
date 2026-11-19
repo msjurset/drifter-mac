@@ -6,7 +6,7 @@ final class AIAdvisorTests: XCTestCase {
         XCTAssertEqual(AIProvider.ollama.defaultModel, "llama3.2")
         XCTAssertFalse(AIProvider.ollama.requiresAPIKey)
 
-        XCTAssertEqual(AIProvider.gemini.defaultModel, "gemini-2.5-flash")
+        XCTAssertEqual(AIProvider.gemini.defaultModel, "gemini-4-hydrogen")
         XCTAssertTrue(AIProvider.gemini.requiresAPIKey)
 
         XCTAssertEqual(AIProvider.anthropic.defaultModel, "claude-3-5-haiku-latest")

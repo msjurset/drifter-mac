@@ -340,7 +340,9 @@ public final class AIAdvisorService: Sendable {
             "maxOutputTokens": deepReasoning ? max(maxTokens, 4096) : max(maxTokens, 1024)
         ]
 
-        if !deepReasoning && (model.contains("2.5") || model.contains("3.") || model.contains("flash") || model.contains("pro")) {
+        if model.contains("gemini-4-") {
+            genConfig["thinkingConfig"] = ["thinkingLevel": deepReasoning ? "MEDIUM" : "LOW"]
+        } else if !deepReasoning && (model.contains("2.5") || model.contains("3.") || model.contains("flash") || model.contains("pro")) {
             genConfig["thinkingConfig"] = ["thinkingBudget": 0]
         }
 
